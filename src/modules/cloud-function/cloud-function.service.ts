@@ -49,7 +49,7 @@ export class CloudFunctionService {
       try {
         JSON.parse(createDto.content);
       } catch (error) {
-        throw new BadRequestException('JSON格式无效');
+        throw new BadRequestException(`JSON格式无效: ${error.message}。当类型为JSON时，content字段必须是有效的JSON字符串，例如: {"key": "value"}`);
       }
     }
 
@@ -207,7 +207,7 @@ export class CloudFunctionService {
       try {
         JSON.parse(updateDto.content);
       } catch (error) {
-        throw new BadRequestException('JSON格式无效');
+        throw new BadRequestException(`JSON格式无效: ${error.message}。当类型为JSON时，content字段必须是有效的JSON字符串，例如: {"key": "value"}`);
       }
     }
 
