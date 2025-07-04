@@ -33,6 +33,7 @@ import { Comment } from './modules/comment/entities/comment.entity';
 import { CloudFunction } from './modules/cloud-function/entities/cloud-function.entity';
 import { CloudFunctionSecret } from './modules/cloud-function/entities/cloud-function-secret.entity';
 import { CloudFunctionLog } from './modules/cloud-function/entities/cloud-function-log.entity';
+import { File } from './modules/upload/entities/file.entity';
 
 // 模块
 import { AuthModule } from './modules/auth/auth.module';
@@ -41,6 +42,7 @@ import { BlogModule } from './modules/blog/blog.module';
 import { CategoryModule } from './modules/category/category.module';
 import { CommentModule } from './modules/comment/comment.module';
 import { CloudFunctionModule } from './modules/cloud-function/cloud-function.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -57,7 +59,7 @@ import { CloudFunctionModule } from './modules/cloud-function/cloud-function.mod
     }),
     
     // 注册实体以供数据库初始化服务使用
-    TypeOrmModule.forFeature([User, Role, Permission, CloudFunction, CloudFunctionSecret, CloudFunctionLog]),
+    TypeOrmModule.forFeature([User, Role, Permission, CloudFunction, CloudFunctionSecret, CloudFunctionLog, File]),
     
     // 限流模块
     ThrottlerModule.forRootAsync({
@@ -78,6 +80,7 @@ import { CloudFunctionModule } from './modules/cloud-function/cloud-function.mod
     CategoryModule,
     CommentModule,
     CloudFunctionModule,
+    UploadModule,
   ],
   providers: [
     // 全局服务

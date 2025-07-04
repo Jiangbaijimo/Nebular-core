@@ -25,6 +25,7 @@ export enum PermissionResource {
   PERMISSION = 'permission',
   SYSTEM = 'system',
   CLOUD_FUNCTION = 'cloud_function',
+  FILE = 'file',
 }
 
 @Entity('permissions')

@@ -93,6 +93,13 @@ export class DatabaseInitService implements OnModuleInit {
       { name: '更新云函数', code: 'UPDATE_CLOUD_FUNCTION', action: PermissionAction.UPDATE, resource: PermissionResource.CLOUD_FUNCTION },
       { name: '删除云函数', code: 'DELETE_CLOUD_FUNCTION', action: PermissionAction.DELETE, resource: PermissionResource.CLOUD_FUNCTION },
       { name: '管理云函数', code: 'MANAGE_CLOUD_FUNCTION', action: PermissionAction.MANAGE, resource: PermissionResource.CLOUD_FUNCTION },
+      
+      // 文件管理权限
+      { name: '创建文件', code: 'CREATE_FILE', action: PermissionAction.CREATE, resource: PermissionResource.FILE },
+      { name: '查看文件', code: 'READ_FILE', action: PermissionAction.READ, resource: PermissionResource.FILE },
+      { name: '更新文件', code: 'UPDATE_FILE', action: PermissionAction.UPDATE, resource: PermissionResource.FILE },
+      { name: '删除文件', code: 'DELETE_FILE', action: PermissionAction.DELETE, resource: PermissionResource.FILE },
+      { name: '管理文件', code: 'MANAGE_FILE', action: PermissionAction.MANAGE, resource: PermissionResource.FILE },
     ];
 
     for (const permissionData of permissions) {
@@ -148,13 +155,14 @@ export class DatabaseInitService implements OnModuleInit {
     });
 
     if (!existingRole) {
-      // 编辑者权限：可以管理博客、分类、评论、云函数，但不能管理用户和系统
+      // 编辑者权限：可以管理博客、分类、评论、云函数、文件，但不能管理用户和系统
       const editorPermissions = await this.permissionRepository.find({
         where: [
           { resource: PermissionResource.BLOG },
           { resource: PermissionResource.CATEGORY },
           { resource: PermissionResource.COMMENT },
           { resource: PermissionResource.CLOUD_FUNCTION },
+          { resource: PermissionResource.FILE },
         ],
       });
       
@@ -177,7 +185,7 @@ export class DatabaseInitService implements OnModuleInit {
     });
 
     if (!existingRole) {
-      // 普通用户权限：只能查看博客、对自己的评论进行增删改查操作
+      // 普通用户权限：只能查看博客、对自己的评论进行增删改查操作、上传和管理自己的文件
       // 注意：普通用户不能创建博客，只有主人公(admin)和管理员(editor)才能创建博客
       const userPermissions = await this.permissionRepository.find({
         where: [
@@ -187,6 +195,10 @@ export class DatabaseInitService implements OnModuleInit {
           { code: 'UPDATE_COMMENT' }, // 允许编辑自己的评论
           { code: 'DELETE_COMMENT' }, // 允许删除自己的评论
           { code: 'READ_CATEGORY' },
+          { code: 'CREATE_FILE' }, // 允许上传文件
+          { code: 'READ_FILE' }, // 允许查看文件
+          { code: 'UPDATE_FILE' }, // 允许更新自己的文件
+          { code: 'DELETE_FILE' }, // 允许删除自己的文件
         ],
       });
       
