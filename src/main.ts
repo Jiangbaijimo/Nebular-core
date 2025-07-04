@@ -64,11 +64,11 @@ async function bootstrap() {
         },
         'JWT-auth',
       )
-      .addTag('auth', '认证相关接口')
-      .addTag('users', '用户管理接口')
-      .addTag('blogs', '博客管理接口')
-      .addTag('categories', '分类管理接口')
-      .addTag('comments', '评论管理接口')
+      .addTag('认证管理', '用户认证相关接口')
+      .addTag('用户管理', '用户管理相关接口')
+      .addTag('博客管理', '博客管理相关接口')
+      .addTag('分类管理', '分类管理相关接口')
+      .addTag('评论管理', '评论管理相关接口')
       .build();
     
     const document = SwaggerModule.createDocument(app, config);
