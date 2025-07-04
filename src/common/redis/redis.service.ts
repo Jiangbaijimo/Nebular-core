@@ -19,9 +19,7 @@ export class RedisService implements OnModuleDestroy {
       port: config.port,
       password: config.password,
       db: config.db,
-      retryDelayOnFailover: config.retryDelayOnFailover,
-      enableReadyCheck: config.enableReadyCheck,
-      maxRetriesPerRequest: config.maxRetriesPerRequest,
+      maxRetriesPerRequest: config.maxRetriesPerRequest || 3,
     });
 
     this.client.on('connect', () => {

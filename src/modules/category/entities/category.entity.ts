@@ -48,7 +48,7 @@ export class Category {
   parent: Category;
 
   @Column({ nullable: true })
-  parentId: number;
+  parentId: number | null;
 
   // 子分类
   @OneToMany(() => Category, (category) => category.parent)

@@ -2,7 +2,7 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('app', () => ({
   name: process.env.APP_NAME || '博客后端系统',
-  port: parseInt(process.env.APP_PORT, 10) || 3000,
+  port: parseInt(process.env.APP_PORT || '3000', 10),
   env: process.env.APP_ENV || 'development',
   
   // OAuth配置
@@ -19,7 +19,7 @@ export default registerAs('app', () => ({
   
   // 文件上传配置
   upload: {
-    maxSize: parseInt(process.env.UPLOAD_MAX_SIZE, 10) || 10485760, // 10MB
+    maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10), // 10MB
     allowedTypes: process.env.UPLOAD_ALLOWED_TYPES?.split(',') || [
       'image/jpeg',
       'image/png',
@@ -31,14 +31,14 @@ export default registerAs('app', () => ({
   // 邮件配置
   mail: {
     host: process.env.MAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.MAIL_PORT, 10) || 587,
+    port: parseInt(process.env.MAIL_PORT || '587', 10),
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
   
   // 限流配置
   throttle: {
-    ttl: parseInt(process.env.THROTTLE_TTL, 10) || 60,
-    limit: parseInt(process.env.THROTTLE_LIMIT, 10) || 10,
+    ttl: parseInt(process.env.THROTTLE_TTL || '60', 10),
+    limit: parseInt(process.env.THROTTLE_LIMIT || '10', 10),
   },
 }));

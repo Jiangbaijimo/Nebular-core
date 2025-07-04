@@ -161,6 +161,10 @@ export class AuthService {
     return { message: '退出登录成功' };
   }
 
+  async generateTokensForUser(user: User) {
+    return this.generateTokens(user);
+  }
+
   private async generateTokens(user: User) {
     const payload = { sub: user.id, email: user.email };
 

@@ -76,9 +76,10 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const result = await this.authService.validateOAuthUser(req.user as any);
+    const user = await this.authService.validateOAuthUser(req.user as any);
+    const tokens = await this.authService.generateTokensForUser(user);
     // 重定向到前端，携带 token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${result.accessToken}&refresh=${result.refreshToken}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
   }
 
   // GitHub OAuth
@@ -93,8 +94,9 @@ export class AuthController {
   @Get('github/callback')
   @UseGuards(AuthGuard('github'))
   async githubAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const result = await this.authService.validateOAuthUser(req.user as any);
+    const user = await this.authService.validateOAuthUser(req.user as any);
+    const tokens = await this.authService.generateTokensForUser(user);
     // 重定向到前端，携带 token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${result.accessToken}&refresh=${result.refreshToken}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
   }
 }

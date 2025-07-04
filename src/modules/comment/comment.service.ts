@@ -125,7 +125,7 @@ export class CommentService {
 
     // 父评论过滤
     if (parentId !== undefined) {
-      if (parentId === null || parentId === '') {
+      if (parentId === null) {
         queryBuilder.andWhere('comment.parent IS NULL');
       } else {
         queryBuilder.andWhere('parent.id = :parentId', { parentId });

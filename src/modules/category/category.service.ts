@@ -1,9 +1,10 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, TreeRepository } from 'typeorm';
 import { Category } from './entities/category.entity';
@@ -32,13 +33,15 @@ export class CategoryService {
     await this.checkSlugUnique(categoryData.slug);
 
     // 检查名称是否唯一（同级别下）
-    await this.checkNameUnique(categoryData.name, parentId);
+    const numericParentIdForCheck = parentId ? (typeof parentId === 'string' ? parseInt(parentId, 10) : parentId) : undefined;
+    await this.checkNameUnique(categoryData.name, numericParentIdForCheck);
 
     const category = this.categoryRepository.create(categoryData);
 
     // 处理父分类
     if (parentId) {
-      const parent = await this.findOne(parentId);
+      const numericParentId = typeof parentId === 'string' ? parseInt(parentId, 10) : parentId;
+      const parent = await this.findOne(numericParentId);
       category.parent = parent;
     }
 
@@ -112,7 +115,7 @@ export class CategoryService {
 
   async findTree(): Promise<Category[]> {
     return this.categoryRepository.find({
-      where: { parent: null, isActive: true },
+      where: { parentId: IsNull(), isActive: true },
       relations: ['children'],
       order: { sort: 'ASC' },
     });
@@ -155,9 +158,12 @@ export class CategoryService {
 
     // 检查名称唯一性
     if (categoryData.name && categoryData.name !== category.name) {
+      const numericParentId = parentId !== undefined 
+        ? (typeof parentId === 'string' ? parseInt(parentId, 10) : parentId)
+        : category.parent?.id;
       await this.checkNameUnique(
         categoryData.name,
-        parentId !== undefined ? parentId : category.parent?.id,
+        numericParentId,
         id,
       );
     }
@@ -165,12 +171,15 @@ export class CategoryService {
     // 处理父分类变更
     if (parentId !== undefined) {
       if (parentId === null) {
-        category.parent = null;
+        category.parent = null as any;
+        category.parentId = null;
       } else {
+        const numericParentId = typeof parentId === 'string' ? parseInt(parentId, 10) : parentId;
         // 检查是否会形成循环引用
-        await this.checkCircularReference(id, parentId);
-        const parent = await this.findOne(parentId);
+        await this.checkCircularReference(id, numericParentId);
+        const parent = await this.findOne(numericParentId);
         category.parent = parent;
+        category.parentId = numericParentId;
       }
     }
 

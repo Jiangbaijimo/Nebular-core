@@ -4,7 +4,7 @@ import {
   IsEnum,
   IsBoolean,
   IsArray,
-  IsUUID,
+  IsNumber,
   IsDateString,
   MinLength,
   MaxLength,
@@ -61,9 +61,15 @@ export class CreateBlogDto {
   tags?: string[];
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  seoKeywords?: string;
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map(keyword => keyword.trim()).filter(keyword => keyword);
+    }
+    return value;
+  })
+  seoKeywords?: string[];
 
   @IsOptional()
   @IsString()
@@ -76,8 +82,8 @@ export class CreateBlogDto {
 
   @IsOptional()
   @IsArray()
-  @IsUUID(4, { each: true })
-  categoryIds?: string[];
+  @IsNumber({}, { each: true })
+  categoryIds?: number[];
 }
 
 export class UpdateBlogDto {
@@ -130,9 +136,15 @@ export class UpdateBlogDto {
   tags?: string[];
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  seoKeywords?: string;
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').map(keyword => keyword.trim()).filter(keyword => keyword);
+    }
+    return value;
+  })
+  seoKeywords?: string[];
 
   @IsOptional()
   @IsString()
@@ -145,8 +157,8 @@ export class UpdateBlogDto {
 
   @IsOptional()
   @IsArray()
-  @IsUUID(4, { each: true })
-  categoryIds?: string[];
+  @IsNumber({}, { each: true })
+  categoryIds?: number[];
 }
 
 export class BlogQueryDto {
@@ -167,12 +179,14 @@ export class BlogQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsUUID(4)
-  categoryId?: string;
+  @Transform(({ value }) => parseInt(value))
+  @IsNumber()
+  categoryId?: number;
 
   @IsOptional()
-  @IsUUID(4)
-  authorId?: string;
+  @Transform(({ value }) => parseInt(value))
+  @IsNumber()
+  authorId?: number;
 
   @IsOptional()
   @IsString()

@@ -55,8 +55,8 @@ import { CommentModule } from './modules/comment/comment.module';
       useFactory: () => ({
         throttlers: [
           {
-            ttl: parseInt(process.env.THROTTLE_TTL, 10) || 60,
-            limit: parseInt(process.env.THROTTLE_LIMIT, 10) || 10,
+            ttl: parseInt(process.env.THROTTLE_TTL || '60', 10),
+            limit: parseInt(process.env.THROTTLE_LIMIT || '10', 10),
           },
         ],
       }),

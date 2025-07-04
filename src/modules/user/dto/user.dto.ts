@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsBoolean,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -48,6 +49,10 @@ export class CreateUserDto {
   @IsOptional()
   @IsString({ message: '提供商ID必须是字符串' })
   providerId?: string;
+
+  @IsOptional()
+  @IsBoolean({ message: '邮箱验证状态必须是布尔值' })
+  emailVerified?: boolean;
 }
 
 export class UpdateUserDto {

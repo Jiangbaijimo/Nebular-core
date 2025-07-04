@@ -10,6 +10,7 @@ import { Blog, BlogStatus } from './entities/blog.entity';
 import { Category } from '../category/entities/category.entity';
 import { User } from '../user/entities/user.entity';
 import { CreateBlogDto, UpdateBlogDto, BlogQueryDto } from './dto/blog.dto';
+import { PermissionAction, PermissionResource } from '../user/entities/permission.entity';
 
 @Injectable()
 export class BlogService {
@@ -267,7 +268,7 @@ export class BlogService {
   private isAdmin(user: User): boolean {
     return user.roles?.some(role => 
       role.permissions?.some(permission => 
-        permission.action === 'MANAGE' && permission.resource === 'BLOG'
+        permission.action === PermissionAction.MANAGE && permission.resource === PermissionResource.BLOG
       )
     ) || false;
   }
