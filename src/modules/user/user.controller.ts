@@ -9,7 +9,7 @@ import {
   Query,
   ParseIntPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import {
   CreateUserDto,
@@ -40,6 +40,10 @@ export class UserController {
   }
 
   @ApiOperation({ summary: '获取用户列表', description: '分页获取用户列表' })
+  @ApiQuery({ name: 'page', required: false, description: '页码', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, description: '每页数量', example: 10 })
+  @ApiQuery({ name: 'status', required: false, description: '用户状态', enum: ['active', 'inactive', 'banned'] })
+  @ApiQuery({ name: 'search', required: false, description: '搜索关键词' })
   @ApiResponse({ status: 200, description: '获取成功' })
   @ApiResponse({ status: 401, description: '未授权访问' })
   @ApiResponse({ status: 403, description: '权限不足' })
@@ -47,14 +51,14 @@ export class UserController {
   @Get()
   @RequirePermissions({ action: PermissionAction.READ, resource: PermissionResource.USER })
   async findAll(
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 10,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @Query('status') status?: UserStatus,
     @Query('search') search?: string,
   ) {
     return this.userService.findAll({
-      page,
-      limit,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
       status,
       search,
     });
