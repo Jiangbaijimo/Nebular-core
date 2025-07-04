@@ -15,6 +15,11 @@ export class RolesGuard implements CanActivate {
       return true;
     }
     const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.some((role) => user.roles?.includes(role));
+    
+    // 检查用户是否有所需的角色
+    // user.roles 是角色对象数组，需要检查角色的 code 属性
+    return requiredRoles.some((requiredRole) => 
+      user.roles?.some((userRole: any) => userRole.code === requiredRole)
+    );
   }
 }
