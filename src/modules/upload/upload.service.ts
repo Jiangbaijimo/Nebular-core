@@ -96,7 +96,7 @@ export class UploadService {
 
     // 由于使用了 diskStorage，文件已经保存到磁盘，我们需要从磁盘读取
     const filePath = file.path;
-    const url = `${this.baseUrl}/api/upload/files/${path.basename(filePath)}`;
+    // 移除不需要的 url 变量，因为现在使用相对路径
 
     try {
       // 从磁盘读取文件内容计算MD5
@@ -235,7 +235,7 @@ export class UploadService {
         if (generateThumbnail) {
           const thumbnailPath = await this.generateThumbnail(filePath, file.buffer);
           if (thumbnailPath) {
-            metadata.thumbnailUrl = `${this.baseUrl}/api/upload/thumbnails/${path.basename(thumbnailPath)}`;
+            metadata.thumbnailUrl = `/api/upload/thumbnails/${path.basename(thumbnailPath)}`;
           }
         }
       } catch (error) {
@@ -285,14 +285,14 @@ export class UploadService {
       id: file.id,
       originalName: file.originalName,
       filename: file.filename,
-      url: `${this.baseUrl}/api/upload/files/${file.filename}`, // 直接访问URL（兼容性）
       mimeType: file.mimeType,
       size: file.size,
       formattedSize: file.formattedSize,
       type: file.type,
       status: file.status,
       metadata: file.metadata,
-      thumbnailUrl: file.metadata?.thumbnailUrl ? `${this.baseUrl}/api/upload/thumbnails/${path.basename(file.metadata.thumbnailUrl)}` : (file.isImage ? `${this.baseUrl}/api/upload/files/${file.filename}` : null),
+      // 只为图片提供缩略图预览地址（相对路径）
+      thumbnailUrl: file.isImage ? `/api/upload/thumbnails/${file.filename}` : null,
       description: file.description,
       tags: file.tags,
       downloadCount: file.downloadCount,
@@ -430,13 +430,51 @@ export class UploadService {
 
 
   async getThumbnailBuffer(filename: string) {
-    const thumbnailPath = path.join(this.uploadDir, 'thumbnails', filename);
-
+    // 首先尝试直接访问（如果传入的就是缩略图文件名）
+    let thumbnailPath = path.join(this.uploadDir, 'thumbnails', filename);
+    
     try {
       await fs.access(thumbnailPath);
       return await fs.readFile(thumbnailPath);
     } catch {
-      throw new NotFoundException('缩略图不存在');
+      // 如果直接访问失败，尝试生成缩略图文件名
+      const baseFilename = path.basename(filename, path.extname(filename));
+      const thumbnailFilename = `${baseFilename}_thumb.webp`;
+      thumbnailPath = path.join(this.uploadDir, 'thumbnails', thumbnailFilename);
+      
+      try {
+        await fs.access(thumbnailPath);
+        return await fs.readFile(thumbnailPath);
+      } catch {
+        // 如果缩略图不存在，尝试为原图生成缩略图
+        const originalFile = await this.fileRepository.findOne({
+          where: { filename, status: FileStatus.COMPLETED },
+        });
+        
+        if (!originalFile || !originalFile.isImage) {
+          throw new NotFoundException('缩略图不存在');
+        }
+        
+        // 读取原图并生成缩略图
+        const originalPath = path.join(this.uploadDir, originalFile.path);
+        try {
+          const originalBuffer = await fs.readFile(originalPath);
+          const generatedThumbnailPath = await this.generateThumbnail(originalPath, originalBuffer);
+          
+          if (generatedThumbnailPath) {
+            // 更新文件的 metadata
+            const metadata = originalFile.metadata || {};
+            metadata.thumbnailUrl = `/api/upload/thumbnails/${path.basename(generatedThumbnailPath)}`;
+            await this.fileRepository.update(originalFile.id, { metadata });
+            
+            return await fs.readFile(generatedThumbnailPath);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to generate thumbnail on demand: ${error.message}`);
+        }
+        
+        throw new NotFoundException('缩略图不存在');
+      }
     }
   }
 
@@ -482,80 +520,9 @@ export class UploadService {
     };
   }
 
-  /**
-   * 生成安全访问令牌
-   */
-  async generateAccessToken(id: number, user: User) {
-    const file = await this.fileRepository.findOne({
-      where: { id, userId: user.id, status: FileStatus.COMPLETED },
-    });
 
-    if (!file) {
-      throw new NotFoundException('文件不存在');
-    }
 
-    // 生成临时访问令牌，有效期1小时
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    const payload = {
-      fileId: file.id,
-      filename: file.filename,
-      userId: user.id,
-      exp: Math.floor(expiresAt.getTime() / 1000),
-    };
 
-    const token = this.jwtService.sign(payload);
-    const secureUrl = `${this.baseUrl}/api/upload/secure/${token}`;
-
-    return {
-      token,
-      secureUrl,
-      expiresAt,
-    };
-  }
-
-  /**
-   * 通过令牌获取文件流
-   */
-  async getFileByToken(token: string) {
-    try {
-      const payload = this.jwtService.verify(token);
-      
-      const file = await this.fileRepository.findOne({
-        where: { 
-          id: payload.fileId, 
-          filename: payload.filename,
-          userId: payload.userId,
-          status: FileStatus.COMPLETED 
-        },
-      });
-
-      if (!file) {
-        throw new NotFoundException('文件不存在或已被删除');
-      }
-
-      const filePath = path.join(this.uploadDir, file.path);
-
-      try {
-        await fs.access(filePath);
-        
-        // 增加下载计数
-        await this.fileRepository.increment({ id: file.id }, 'downloadCount', 1);
-        
-        const stream = require('fs').createReadStream(filePath);
-        return {
-          stream,
-          file,
-        };
-      } catch {
-        throw new NotFoundException('文件不存在');
-      }
-    } catch (error) {
-      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-        throw new UnauthorizedException('无效或已过期的访问令牌');
-      }
-      throw error;
-    }
-  }
 
   async generateDownloadLink(id: number, user: User) {
     const file = await this.fileRepository.findOne({
@@ -576,7 +543,7 @@ export class UploadService {
     expiresAt.setHours(expiresAt.getHours() + 1);
 
     return {
-      downloadUrl: `${this.baseUrl}/api/upload/download/${token}`,
+      downloadUrl: `/api/upload/download/${token}`,
       expiresAt,
       filename: file.originalName,
     };

@@ -47,9 +47,6 @@ export class FileResponseDto {
   @ApiProperty({ description: '存储文件名' })
   filename: string;
 
-  @ApiProperty({ description: '文件访问URL' })
-  url: string;
-
   @ApiProperty({ description: 'MIME类型' })
   mimeType: string;
 

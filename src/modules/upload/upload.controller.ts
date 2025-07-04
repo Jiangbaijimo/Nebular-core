@@ -8,13 +8,14 @@ import {
   Param,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   ParseIntPipe,
   Res,
   StreamableFile,
   Header,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -151,10 +152,10 @@ export class UploadController {
   })
   @ApiBearerAuth('JWT-auth')
   @Post('batch')
-  @UseInterceptors(FileInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 10))
   @RequirePermissions({ action: PermissionAction.CREATE, resource: PermissionResource.FILE })
   async batchUpload(
-    @UploadedFile() files: Express.Multer.File[],
+    @UploadedFiles() files: Express.Multer.File[],
     @Body() uploadDto: UploadFileDto,
     @CurrentUser() user: User,
   ) {
@@ -208,27 +209,7 @@ export class UploadController {
     return this.uploadService.getStats(user);
   }
 
-  @ApiOperation({ summary: '安全访问文件', description: '通过临时 token 安全访问文件' })
-  @ApiResponse({ status: 200, description: '文件内容' })
-  @ApiResponse({ status: 401, description: '无效的访问令牌' })
-  @ApiResponse({ status: 404, description: '文件不存在' })
-  @Public()
-  @Get('secure/:token')
-  async getSecureFile(
-    @Param('token') token: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const { stream, file } = await this.uploadService.getFileByToken(token);
-    
-    res.set({
-      'Content-Type': file.mimeType,
-      'Content-Disposition': `inline; filename="${encodeURIComponent(file.originalName)}"`,
-      'Cache-Control': 'private, max-age=3600', // 1小时缓存
-      'X-Robots-Tag': 'noindex, nofollow', // 防止搜索引擎索引
-    });
 
-    return new StreamableFile(stream);
-  }
 
   @ApiOperation({ summary: '生成下载链接', description: '为文件生成临时下载链接' })
   @ApiResponse({ 
@@ -300,30 +281,7 @@ export class UploadController {
     res.end(buffer);
   }
 
-  @ApiOperation({ summary: '生成安全访问令牌', description: '为文件生成临时访问令牌' })
-  @ApiResponse({ 
-    status: 200, 
-    description: '令牌生成成功',
-    schema: {
-      type: 'object',
-      properties: {
-        token: { type: 'string', description: '访问令牌' },
-        secureUrl: { type: 'string', description: '安全访问URL' },
-        expiresAt: { type: 'string', format: 'date-time', description: '过期时间' }
-      }
-    }
-  })
-  @ApiResponse({ status: 401, description: '未授权访问' })
-  @ApiResponse({ status: 404, description: '文件不存在' })
-  @ApiBearerAuth('JWT-auth')
-  @Post(':id/token')
-  @RequirePermissions({ action: PermissionAction.READ, resource: PermissionResource.FILE })
-  async generateAccessToken(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: User,
-  ) {
-    return this.uploadService.generateAccessToken(id, user);
-  }
+
 
   @ApiOperation({ summary: '获取文件详情', description: '根据ID获取文件详细信息' })
   @ApiResponse({
