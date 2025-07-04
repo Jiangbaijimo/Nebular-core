@@ -163,11 +163,23 @@ export class UpdateBlogDto {
 
 export class BlogQueryDto {
   @IsOptional()
-  @Transform(({ value }) => parseInt(value))
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) {
+      return 1;
+    }
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? 1 : parsed;
+  })
   page?: number = 1;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value))
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) {
+      return 10;
+    }
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? 10 : parsed;
+  })
   limit?: number = 10;
 
   @IsOptional()
@@ -179,12 +191,24 @@ export class BlogQueryDto {
   search?: string;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value))
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) {
+      return undefined;
+    }
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? undefined : parsed;
+  })
   @IsNumber()
   categoryId?: number;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value))
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) {
+      return undefined;
+    }
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? undefined : parsed;
+  })
   @IsNumber()
   authorId?: number;
 
