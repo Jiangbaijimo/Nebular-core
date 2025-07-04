@@ -281,6 +281,12 @@ export class UploadService {
   }
 
   private toResponseDto(file: File): FileResponseDto {
+    // 清理 metadata 中的 thumbnailUrl，避免重复返回
+    const cleanMetadata = file.metadata ? { ...file.metadata } : {};
+    if (cleanMetadata.thumbnailUrl) {
+      delete cleanMetadata.thumbnailUrl;
+    }
+
     return {
       id: file.id,
       originalName: file.originalName,
@@ -290,7 +296,7 @@ export class UploadService {
       formattedSize: file.formattedSize,
       type: file.type,
       status: file.status,
-      metadata: file.metadata,
+      metadata: Object.keys(cleanMetadata).length > 0 ? cleanMetadata : undefined,
       // 只为图片提供缩略图预览地址（相对路径）
       thumbnailUrl: file.isImage ? `/api/upload/thumbnails/${file.filename}` : null,
       description: file.description,
