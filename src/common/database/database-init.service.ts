@@ -164,13 +164,14 @@ export class DatabaseInitService implements OnModuleInit {
     });
 
     if (!existingRole) {
-      // 普通用户权限：只能创建和管理自己的博客和评论
+      // 普通用户权限：只能查看博客、创建和管理自己的评论
+      // 注意：普通用户不能创建博客，只有主人公(admin)和管理员(editor)才能创建博客
       const userPermissions = await this.permissionRepository.find({
         where: [
-          { code: 'CREATE_BLOG' },
           { code: 'READ_BLOG' },
           { code: 'CREATE_COMMENT' },
           { code: 'READ_COMMENT' },
+          { code: 'UPDATE_COMMENT' }, // 允许编辑自己的评论
           { code: 'READ_CATEGORY' },
         ],
       });
@@ -178,7 +179,7 @@ export class DatabaseInitService implements OnModuleInit {
       const userRole = this.roleRepository.create({
         name: '普通用户',
         code: 'user',
-        description: '普通用户，可以创建博客和评论',
+        description: '普通用户，可以查看博客、发表和编辑自己的评论',
         isSystem: true,
         permissions: userPermissions,
       });
