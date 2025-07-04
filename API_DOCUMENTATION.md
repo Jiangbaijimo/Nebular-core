@@ -121,8 +121,8 @@
 **请求参数**:
 ```json
 {
-  "email": "user@example.com",
-  "password": "Password123",
+  "email": "user1@example.com",
+  "password": "Password1234",
   "username": "username",
   "nickname": "昵称",
   "bio": "个人简介",

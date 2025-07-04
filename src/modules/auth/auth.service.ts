@@ -41,7 +41,7 @@ export class AuthService {
     // 加密密码
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 创建用户
+    // 创建用户（会自动处理第一个用户的管理员权限分配）
     const user = await this.userService.create({
       email,
       password: hashedPassword,

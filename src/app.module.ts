@@ -12,6 +12,7 @@ import jwtConfig from './config/jwt.config';
 
 // 数据库服务
 import { DatabaseService } from './common/database/database.service';
+import { DatabaseInitService } from './common/database/database-init.service';
 import { RedisService } from './common/redis/redis.service';
 
 // 守卫、过滤器、拦截器、管道
@@ -50,6 +51,9 @@ import { CommentModule } from './modules/comment/comment.module';
       useClass: DatabaseService,
     }),
     
+    // 注册实体以供数据库初始化服务使用
+    TypeOrmModule.forFeature([User, Role, Permission]),
+    
     // 限流模块
     ThrottlerModule.forRootAsync({
       useFactory: () => ({
@@ -72,6 +76,7 @@ import { CommentModule } from './modules/comment/comment.module';
   providers: [
     // 全局服务
     RedisService,
+    DatabaseInitService,
     
     // 全局守卫
     {

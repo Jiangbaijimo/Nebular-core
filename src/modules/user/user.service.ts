@@ -17,13 +17,37 @@ export class UserService {
   async create(createUserDto: CreateUserDto): Promise<User> {
     const user = this.userRepository.create(createUserDto);
     
-    // 为新用户分配默认角色
-    const defaultRole = await this.roleRepository.findOne({
-      where: { code: 'user' },
-    });
+    // 检查是否为第一个用户
+    const userCount = await this.userRepository.count();
     
-    if (defaultRole) {
-      user.roles = [defaultRole];
+    if (userCount === 0) {
+      // 第一个用户自动获得超级管理员权限
+      const adminRole = await this.roleRepository.findOne({
+        where: { code: 'admin' },
+      });
+      
+      if (adminRole) {
+        user.roles = [adminRole];
+      } else {
+        // 如果没有管理员角色，创建一个
+        const newAdminRole = this.roleRepository.create({
+          name: '超级管理员',
+          code: 'admin',
+          description: '系统超级管理员，拥有所有权限',
+          isSystem: true,
+        });
+        const savedAdminRole = await this.roleRepository.save(newAdminRole);
+        user.roles = [savedAdminRole];
+      }
+    } else {
+      // 为普通用户分配默认角色
+      const defaultRole = await this.roleRepository.findOne({
+        where: { code: 'user' },
+      });
+      
+      if (defaultRole) {
+        user.roles = [defaultRole];
+      }
     }
 
     return this.userRepository.save(user);
