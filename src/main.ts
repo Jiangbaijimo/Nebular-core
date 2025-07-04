@@ -1,7 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
+import { Logger, ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -43,6 +44,9 @@ async function bootstrap() {
   
   // 全局异常过滤器
   app.useGlobalFilters(new HttpExceptionFilter());
+  
+  // 全局序列化拦截器（用于处理@Exclude等装饰器）
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   
   // 全局响应拦截器
   app.useGlobalInterceptors(new ResponseInterceptor());

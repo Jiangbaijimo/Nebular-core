@@ -64,7 +64,36 @@ export class UserService {
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.roles', 'roles')
-      .leftJoinAndSelect('roles.permissions', 'permissions');
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ]);
 
     // 状态过滤
     if (status) {
@@ -97,10 +126,41 @@ export class UserService {
   }
 
   async findById(id: number): Promise<User> {
-    const user = await this.userRepository.findOne({
-      where: { id },
-      relations: ['roles', 'roles.permissions'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ])
+      .where('user.id = :id', { id })
+      .getOne();
 
     if (!user) {
       throw new NotFoundException('用户不存在');
@@ -110,27 +170,182 @@ export class UserService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ])
+      .where('user.email = :email', { email })
+      .getOne();
+
+    return user;
+  }
+
+  async findByUsername(username: string): Promise<User | null> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ])
+      .where('user.username = :username', { username })
+      .getOne();
+
+    return user;
+  }
+
+  // 内部方法：用于认证时获取包含密码的用户信息
+  async findByProviderId(providerId: string): Promise<User | null> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ])
+      .where('user.providerId = :providerId', { providerId })
+      .getOne();
+
+    return user;
+  }
+
+  // 内部方法：用于认证时获取包含密码的用户信息
+  async findByEmailWithPassword(email: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { email },
       relations: ['roles', 'roles.permissions'],
     });
   }
 
-  async findByUsername(username: string): Promise<User | null> {
+  async findByUsernameWithPassword(username: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { username },
       relations: ['roles', 'roles.permissions'],
     });
   }
 
-  async findByProviderId(
+  async findByProviderIdAndProvider(
     providerId: string,
     provider: AuthProvider,
   ): Promise<User | null> {
-    return this.userRepository.findOne({
-      where: { providerId, provider },
-      relations: ['roles', 'roles.permissions'],
-    });
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('roles.permissions', 'permissions')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.avatar',
+        'user.nickname',
+        'user.bio',
+        'user.status',
+        'user.provider',
+        'user.providerId',
+        'user.emailVerified',
+        'user.lastLoginAt',
+        'user.lastLoginIp',
+        'user.createdAt',
+        'user.updatedAt',
+        'roles.id',
+        'roles.name',
+        'roles.code',
+        'roles.description',
+        'roles.isActive',
+        'roles.isSystem',
+        'permissions.id',
+        'permissions.name',
+        'permissions.code',
+        'permissions.action',
+        'permissions.resource',
+        'permissions.description',
+        'permissions.isActive',
+      ])
+      .where('user.providerId = :providerId AND user.provider = :provider', { providerId, provider })
+      .getOne();
+
+    return user;
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {

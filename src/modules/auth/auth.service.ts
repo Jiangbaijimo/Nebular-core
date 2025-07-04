@@ -25,14 +25,14 @@ export class AuthService {
     const { email, password, username, nickname } = registerDto;
 
     // 检查邮箱是否已存在
-    const existingUser = await this.userService.findByEmail(email);
+    const existingUser = await this.userService.findByEmailWithPassword(email);
     if (existingUser) {
       throw new ConflictException('邮箱已被注册');
     }
 
     // 检查用户名是否已存在
     if (username) {
-      const existingUsername = await this.userService.findByUsername(username);
+      const existingUsername = await this.userService.findByUsernameWithPassword(username);
       if (existingUsername) {
         throw new ConflictException('用户名已被使用');
       }
@@ -63,7 +63,7 @@ export class AuthService {
     const { email, password } = loginDto;
 
     // 查找用户
-    const user = await this.userService.findByEmail(email);
+    const user = await this.userService.findByEmailWithPassword(email);
     if (!user) {
       throw new UnauthorizedException('邮箱或密码错误');
     }
@@ -92,7 +92,7 @@ export class AuthService {
   }
 
   async validateOAuthUser(oauthUser: any): Promise<User> {
-    let user = await this.userService.findByProviderId(
+    let user = await this.userService.findByProviderIdAndProvider(
       oauthUser.providerId,
       oauthUser.provider,
     );

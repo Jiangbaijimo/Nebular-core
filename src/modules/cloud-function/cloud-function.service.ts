@@ -62,7 +62,8 @@ export class CloudFunctionService {
     const saved = await this.cloudFunctionRepository.save(cloudFunction);
     this.logger.log(`云函数 ${saved.name} 创建成功`);
     
-    return saved;
+    // 重新查询以获取正确的关联数据（排除敏感信息）
+    return this.findOne(saved.id);
   }
 
   /**
@@ -147,10 +148,42 @@ export class CloudFunctionService {
    * 根据ID查询云函数
    */
   async findOne(id: number): Promise<CloudFunction> {
-    const cloudFunction = await this.cloudFunctionRepository.findOne({
-      where: { id },
-      relations: ['author', 'secrets'],
-    });
+    const cloudFunction = await this.cloudFunctionRepository
+      .createQueryBuilder('cf')
+      .leftJoinAndSelect('cf.author', 'author')
+      .leftJoinAndSelect('cf.secrets', 'secrets')
+      .select([
+        'cf.id',
+        'cf.name',
+        'cf.reference',
+        'cf.description',
+        'cf.type',
+        'cf.method',
+        'cf.status',
+        'cf.content',
+        'cf.config',
+        'cf.isPublic',
+        'cf.timeout',
+        'cf.headers',
+        'cf.callCount',
+        'cf.lastCalledAt',
+        'cf.lastError',
+        'cf.createdAt',
+        'cf.updatedAt',
+        'author.id',
+        'author.email',
+        'author.username',
+        'author.nickname',
+        'author.avatar',
+        'author.bio',
+        'author.status',
+        'secrets.id',
+        'secrets.key',
+        'secrets.description',
+        'secrets.isActive',
+      ])
+      .where('cf.id = :id', { id })
+      .getOne();
 
     if (!cloudFunction) {
       throw new NotFoundException('云函数不存在');
@@ -163,10 +196,45 @@ export class CloudFunctionService {
    * 根据引用名称查询云函数
    */
   async findByReference(reference: string): Promise<CloudFunction> {
-    const cloudFunction = await this.cloudFunctionRepository.findOne({
-      where: { reference, status: CloudFunctionStatus.ACTIVE },
-      relations: ['author', 'secrets'],
-    });
+    const cloudFunction = await this.cloudFunctionRepository
+      .createQueryBuilder('cf')
+      .leftJoinAndSelect('cf.author', 'author')
+      .leftJoinAndSelect('cf.secrets', 'secrets')
+      .select([
+        'cf.id',
+        'cf.name',
+        'cf.reference',
+        'cf.description',
+        'cf.type',
+        'cf.method',
+        'cf.status',
+        'cf.content',
+        'cf.config',
+        'cf.isPublic',
+        'cf.timeout',
+        'cf.headers',
+        'cf.callCount',
+        'cf.lastCalledAt',
+        'cf.lastError',
+        'cf.createdAt',
+        'cf.updatedAt',
+        'author.id',
+        'author.email',
+        'author.username',
+        'author.nickname',
+        'author.avatar',
+        'author.bio',
+        'author.status',
+        'secrets.id',
+        'secrets.key',
+        'secrets.description',
+        'secrets.isActive',
+      ])
+      .where('cf.reference = :reference AND cf.status = :status', { 
+        reference, 
+        status: CloudFunctionStatus.ACTIVE 
+      })
+      .getOne();
 
     if (!cloudFunction) {
       throw new NotFoundException('云函数不存在');
