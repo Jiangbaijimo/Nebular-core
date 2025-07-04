@@ -91,18 +91,14 @@ export class UploadService {
     // 验证文件
     this.validateFile(file);
 
-    // 生成文件名和路径
-    const filename = this.generateFilename(file.originalname);
-    const relativePath = this.getRelativePath(filename);
-    const fullPath = path.join(this.uploadDir, relativePath);
-    const url = `${this.baseUrl}/api/upload/files/${filename}`;
-
-    // 确保目录存在
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    // 由于使用了 diskStorage，文件已经保存到磁盘，我们需要从磁盘读取
+    const filePath = file.path;
+    const url = `${this.baseUrl}/api/upload/files/${path.basename(filePath)}`;
 
     try {
-      // 计算文件MD5
-      const md5 = crypto.createHash('md5').update(file.buffer).digest('hex');
+      // 从磁盘读取文件内容计算MD5
+      const fileBuffer = await fs.readFile(filePath);
+      const md5 = crypto.createHash('md5').update(fileBuffer).digest('hex');
 
       // 检查是否已存在相同文件
       const existingFile = await this.fileRepository.findOne({
@@ -111,11 +107,10 @@ export class UploadService {
 
       if (existingFile && existingFile.status === FileStatus.COMPLETED) {
         this.logger.log(`File already exists: ${existingFile.filename}`);
+        // 删除重复文件
+        await fs.unlink(filePath);
         return this.toResponseDto(existingFile);
       }
-
-      // 保存文件
-      await fs.writeFile(fullPath, file.buffer);
 
       // 确定文件类型
       const fileType = this.getFileType(file.mimetype);
@@ -123,11 +118,14 @@ export class UploadService {
       // 生成元数据
       const metadata = await this.generateMetadata(
         file,
-        fullPath,
+        filePath,
         uploadDto.generateThumbnail,
       );
 
       // 创建文件记录
+      const filename = path.basename(filePath);
+      const relativePath = path.relative(this.uploadDir, filePath);
+      
       const fileEntity = this.fileRepository.create({
         originalName: file.originalname,
         filename,
@@ -151,7 +149,7 @@ export class UploadService {
     } catch (error) {
       // 清理已上传的文件
       try {
-        await fs.unlink(fullPath);
+        await fs.unlink(filePath);
       } catch {}
 
       this.logger.error(`Failed to upload file: ${error.message}`, error.stack);
@@ -162,6 +160,14 @@ export class UploadService {
   private validateFile(file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('未选择文件');
+    }
+
+    if (!file.path) {
+      throw new BadRequestException('文件上传失败');
+    }
+
+    if (file.size === 0) {
+      throw new BadRequestException('文件内容为空');
     }
 
     if (file.size > this.maxFileSize) {
