@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Role } from '../../modules/user/entities/role.entity';
 import { Permission, PermissionAction, PermissionResource } from '../../modules/user/entities/permission.entity';
+import { CloudFunctionInitService } from '../../modules/cloud-function/cloud-function-init.service';
 
 @Injectable()
 export class DatabaseInitService implements OnModuleInit {
@@ -13,6 +14,7 @@ export class DatabaseInitService implements OnModuleInit {
     private roleRepository: Repository<Role>,
     @InjectRepository(Permission)
     private permissionRepository: Repository<Permission>,
+    private cloudFunctionInitService: CloudFunctionInitService,
   ) {}
 
   async onModuleInit() {
@@ -28,6 +30,9 @@ export class DatabaseInitService implements OnModuleInit {
       
       // 创建基础角色
       await this.createRoles();
+      
+      // 初始化示例云函数
+      await this.cloudFunctionInitService.initializeSampleCloudFunctions();
       
       this.logger.log('角色和权限数据初始化完成');
     } catch (error) {
@@ -81,6 +86,13 @@ export class DatabaseInitService implements OnModuleInit {
       
       // 系统管理权限
       { name: '系统管理', code: 'MANAGE_SYSTEM', action: PermissionAction.MANAGE, resource: PermissionResource.SYSTEM },
+      
+      // 云函数管理权限
+      { name: '创建云函数', code: 'CREATE_CLOUD_FUNCTION', action: PermissionAction.CREATE, resource: PermissionResource.CLOUD_FUNCTION },
+      { name: '查看云函数', code: 'READ_CLOUD_FUNCTION', action: PermissionAction.READ, resource: PermissionResource.CLOUD_FUNCTION },
+      { name: '更新云函数', code: 'UPDATE_CLOUD_FUNCTION', action: PermissionAction.UPDATE, resource: PermissionResource.CLOUD_FUNCTION },
+      { name: '删除云函数', code: 'DELETE_CLOUD_FUNCTION', action: PermissionAction.DELETE, resource: PermissionResource.CLOUD_FUNCTION },
+      { name: '管理云函数', code: 'MANAGE_CLOUD_FUNCTION', action: PermissionAction.MANAGE, resource: PermissionResource.CLOUD_FUNCTION },
     ];
 
     for (const permissionData of permissions) {
@@ -136,19 +148,20 @@ export class DatabaseInitService implements OnModuleInit {
     });
 
     if (!existingRole) {
-      // 编辑者权限：可以管理博客、分类、评论，但不能管理用户和系统
+      // 编辑者权限：可以管理博客、分类、评论、云函数，但不能管理用户和系统
       const editorPermissions = await this.permissionRepository.find({
         where: [
           { resource: PermissionResource.BLOG },
           { resource: PermissionResource.CATEGORY },
           { resource: PermissionResource.COMMENT },
+          { resource: PermissionResource.CLOUD_FUNCTION },
         ],
       });
       
       const editorRole = this.roleRepository.create({
         name: '编辑者',
         code: 'editor',
-        description: '内容编辑者，可以管理博客、分类和评论',
+        description: '内容编辑者，可以管理博客、分类、评论和云函数',
         isSystem: true,
         permissions: editorPermissions,
       });

@@ -69,6 +69,8 @@ async function bootstrap() {
       .addTag('博客管理', '博客管理相关接口')
       .addTag('分类管理', '分类管理相关接口')
       .addTag('评论管理', '评论管理相关接口')
+      .addTag('云函数管理', '云函数管理相关接口')
+      .addTag('云函数执行', '云函数执行相关接口')
       .build();
     
     const document = SwaggerModule.createDocument(app, config);

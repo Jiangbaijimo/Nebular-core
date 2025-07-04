@@ -14,6 +14,7 @@ import jwtConfig from './config/jwt.config';
 import { DatabaseService } from './common/database/database.service';
 import { DatabaseInitService } from './common/database/database-init.service';
 import { RedisService } from './common/redis/redis.service';
+import { CloudFunctionInitService } from './modules/cloud-function/cloud-function-init.service';
 
 // 守卫、过滤器、拦截器、管道
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -29,6 +30,9 @@ import { Permission } from './modules/user/entities/permission.entity';
 import { Blog } from './modules/blog/entities/blog.entity';
 import { Category } from './modules/category/entities/category.entity';
 import { Comment } from './modules/comment/entities/comment.entity';
+import { CloudFunction } from './modules/cloud-function/entities/cloud-function.entity';
+import { CloudFunctionSecret } from './modules/cloud-function/entities/cloud-function-secret.entity';
+import { CloudFunctionLog } from './modules/cloud-function/entities/cloud-function-log.entity';
 
 // 模块
 import { AuthModule } from './modules/auth/auth.module';
@@ -36,6 +40,7 @@ import { UserModule } from './modules/user/user.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { CategoryModule } from './modules/category/category.module';
 import { CommentModule } from './modules/comment/comment.module';
+import { CloudFunctionModule } from './modules/cloud-function/cloud-function.module';
 
 @Module({
   imports: [
@@ -52,7 +57,7 @@ import { CommentModule } from './modules/comment/comment.module';
     }),
     
     // 注册实体以供数据库初始化服务使用
-    TypeOrmModule.forFeature([User, Role, Permission]),
+    TypeOrmModule.forFeature([User, Role, Permission, CloudFunction, CloudFunctionSecret, CloudFunctionLog]),
     
     // 限流模块
     ThrottlerModule.forRootAsync({
@@ -72,11 +77,13 @@ import { CommentModule } from './modules/comment/comment.module';
     BlogModule,
     CategoryModule,
     CommentModule,
+    CloudFunctionModule,
   ],
   providers: [
     // 全局服务
     RedisService,
     DatabaseInitService,
+    CloudFunctionInitService,
     
     // 全局守卫
     {
