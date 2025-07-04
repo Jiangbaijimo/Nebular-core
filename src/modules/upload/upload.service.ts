@@ -3,11 +3,13 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -37,6 +39,7 @@ export class UploadService {
     @InjectRepository(File)
     private fileRepository: Repository<File>,
     private configService: ConfigService,
+    private jwtService: JwtService,
   ) {
     this.uploadDir = this.configService.get('UPLOAD_DIR', './uploads');
     this.baseUrl = this.configService.get('BASE_URL', 'http://localhost:3000');
@@ -130,7 +133,7 @@ export class UploadService {
         originalName: file.originalname,
         filename,
         path: relativePath,
-        url,
+        url: relativePath, // 存储相对路径而不是完整URL
         mimeType: file.mimetype,
         size: file.size,
         md5,
@@ -282,14 +285,14 @@ export class UploadService {
       id: file.id,
       originalName: file.originalName,
       filename: file.filename,
-      url: file.url,
+      url: `${this.baseUrl}/api/upload/files/${file.filename}`, // 直接访问URL（兼容性）
       mimeType: file.mimeType,
       size: file.size,
       formattedSize: file.formattedSize,
       type: file.type,
       status: file.status,
       metadata: file.metadata,
-      thumbnailUrl: file.thumbnailUrl,
+      thumbnailUrl: file.metadata?.thumbnailUrl ? `${this.baseUrl}/api/upload/thumbnails/${path.basename(file.metadata.thumbnailUrl)}` : (file.isImage ? `${this.baseUrl}/api/upload/files/${file.filename}` : null),
       description: file.description,
       tags: file.tags,
       downloadCount: file.downloadCount,
@@ -424,33 +427,9 @@ export class UploadService {
     this.logger.log(`Batch deleted ${fileIds.length} files`);
   }
 
-  async getFileStream(filename: string) {
-    const file = await this.fileRepository.findOne({
-      where: { filename, status: FileStatus.COMPLETED },
-    });
 
-    if (!file) {
-      throw new NotFoundException('文件不存在');
-    }
 
-    const filePath = path.join(this.uploadDir, file.path);
-
-    try {
-      await fs.access(filePath);
-      
-      // 增加下载计数
-      await this.fileRepository.increment({ id: file.id }, 'downloadCount', 1);
-      
-      return {
-        stream: await fs.readFile(filePath),
-        file,
-      };
-    } catch {
-      throw new NotFoundException('文件不存在');
-    }
-  }
-
-  async getThumbnailStream(filename: string) {
+  async getThumbnailBuffer(filename: string) {
     const thumbnailPath = path.join(this.uploadDir, 'thumbnails', filename);
 
     try {
@@ -460,6 +439,8 @@ export class UploadService {
       throw new NotFoundException('缩略图不存在');
     }
   }
+
+
 
   async getStats(user: User) {
     const stats = await this.fileRepository
@@ -499,5 +480,146 @@ export class UploadService {
         formattedSize: this.formatFileSize(parseInt(stat.totalSize) || 0),
       })),
     };
+  }
+
+  /**
+   * 生成安全访问令牌
+   */
+  async generateAccessToken(id: number, user: User) {
+    const file = await this.fileRepository.findOne({
+      where: { id, userId: user.id, status: FileStatus.COMPLETED },
+    });
+
+    if (!file) {
+      throw new NotFoundException('文件不存在');
+    }
+
+    // 生成临时访问令牌，有效期1小时
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const payload = {
+      fileId: file.id,
+      filename: file.filename,
+      userId: user.id,
+      exp: Math.floor(expiresAt.getTime() / 1000),
+    };
+
+    const token = this.jwtService.sign(payload);
+    const secureUrl = `${this.baseUrl}/api/upload/secure/${token}`;
+
+    return {
+      token,
+      secureUrl,
+      expiresAt,
+    };
+  }
+
+  /**
+   * 通过令牌获取文件流
+   */
+  async getFileByToken(token: string) {
+    try {
+      const payload = this.jwtService.verify(token);
+      
+      const file = await this.fileRepository.findOne({
+        where: { 
+          id: payload.fileId, 
+          filename: payload.filename,
+          userId: payload.userId,
+          status: FileStatus.COMPLETED 
+        },
+      });
+
+      if (!file) {
+        throw new NotFoundException('文件不存在或已被删除');
+      }
+
+      const filePath = path.join(this.uploadDir, file.path);
+
+      try {
+        await fs.access(filePath);
+        
+        // 增加下载计数
+        await this.fileRepository.increment({ id: file.id }, 'downloadCount', 1);
+        
+        const stream = require('fs').createReadStream(filePath);
+        return {
+          stream,
+          file,
+        };
+      } catch {
+        throw new NotFoundException('文件不存在');
+      }
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('无效或已过期的访问令牌');
+      }
+      throw error;
+    }
+  }
+
+  async generateDownloadLink(id: number, user: User) {
+    const file = await this.fileRepository.findOne({
+      where: { id, userId: user.id, status: FileStatus.COMPLETED },
+    });
+
+    if (!file) {
+      throw new NotFoundException('文件不存在');
+    }
+
+    const expiresIn = '1h'; // 1小时有效期
+    const token = this.jwtService.sign(
+      { fileId: file.id, type: 'download' },
+      { expiresIn }
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    return {
+      downloadUrl: `${this.baseUrl}/api/upload/download/${token}`,
+      expiresAt,
+      filename: file.originalName,
+    };
+  }
+
+  async downloadByToken(token: string) {
+    try {
+      const payload = this.jwtService.verify(token);
+      const { fileId, type } = payload;
+
+      if (type !== 'download') {
+        throw new UnauthorizedException('无效的下载令牌');
+      }
+
+      const file = await this.fileRepository.findOne({
+        where: { id: fileId, status: FileStatus.COMPLETED },
+      });
+
+      if (!file) {
+        throw new NotFoundException('文件不存在');
+      }
+
+      const filePath = path.join(this.uploadDir, file.path);
+      
+      try {
+        await fs.access(filePath);
+        
+        // 增加下载计数
+        await this.fileRepository.increment({ id: file.id }, 'downloadCount', 1);
+        
+        const buffer = await fs.readFile(filePath);
+        return { buffer, file };
+      } catch {
+        throw new NotFoundException('文件不存在');
+      }
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('下载令牌已过期');
+      }
+      if (error.name === 'JsonWebTokenError') {
+        throw new UnauthorizedException('无效的下载令牌');
+      }
+      throw error;
+    }
   }
 }

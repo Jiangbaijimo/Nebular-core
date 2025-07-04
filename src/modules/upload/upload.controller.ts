@@ -208,62 +208,121 @@ export class UploadController {
     return this.uploadService.getStats(user);
   }
 
-  @ApiOperation({ summary: '访问文件', description: '通过文件名访问文件（公开接口）' })
+  @ApiOperation({ summary: '安全访问文件', description: '通过临时 token 安全访问文件' })
   @ApiResponse({ status: 200, description: '文件内容' })
+  @ApiResponse({ status: 401, description: '无效的访问令牌' })
   @ApiResponse({ status: 404, description: '文件不存在' })
   @Public()
-  @Get('files/:filename')
-  async getFile(
-    @Param('filename') filename: string,
+  @Get('secure/:token')
+  async getSecureFile(
+    @Param('token') token: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { stream, file } = await this.uploadService.getFileStream(filename);
+    const { stream, file } = await this.uploadService.getFileByToken(token);
     
     res.set({
       'Content-Type': file.mimeType,
       'Content-Disposition': `inline; filename="${encodeURIComponent(file.originalName)}"`,
-      'Cache-Control': 'public, max-age=31536000', // 1年缓存
+      'Cache-Control': 'private, max-age=3600', // 1小时缓存
+      'X-Robots-Tag': 'noindex, nofollow', // 防止搜索引擎索引
     });
 
     return new StreamableFile(stream);
   }
 
-  @ApiOperation({ summary: '下载文件', description: '下载文件到本地' })
-  @ApiResponse({ status: 200, description: '文件下载' })
+  @ApiOperation({ summary: '生成下载链接', description: '为文件生成临时下载链接' })
+  @ApiResponse({ 
+    status: 200, 
+    description: '下载链接生成成功',
+    schema: {
+      type: 'object',
+      properties: {
+        downloadUrl: { type: 'string', description: '下载链接' },
+        expiresAt: { type: 'string', format: 'date-time', description: '过期时间' },
+        filename: { type: 'string', description: '文件名' }
+      }
+    }
+  })
+  @ApiResponse({ status: 401, description: '未授权访问' })
+  @ApiResponse({ status: 404, description: '文件不存在' })
+  @ApiBearerAuth('JWT-auth')
+  @Post(':id/download-link')
+  @RequirePermissions({ action: PermissionAction.READ, resource: PermissionResource.FILE })
+  async generateDownloadLink(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.uploadService.generateDownloadLink(id, user);
+  }
+
+  @ApiOperation({ summary: '通过令牌下载文件', description: '使用临时令牌下载文件' })
+  @ApiResponse({ status: 200, description: '文件内容' })
+  @ApiResponse({ status: 401, description: '无效的下载令牌' })
   @ApiResponse({ status: 404, description: '文件不存在' })
   @Public()
-  @Get('download/:filename')
-  async downloadFile(
-    @Param('filename') filename: string,
-    @Res({ passthrough: true }) res: Response,
+  @Get('download/:token')
+  async downloadByToken(
+    @Param('token') token: string,
+    @Res() res: Response,
   ) {
-    const { stream, file } = await this.uploadService.getFileStream(filename);
+    const result = await this.uploadService.downloadByToken(token);
     
     res.set({
-      'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      'Content-Type': result.file.mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(result.file.originalName)}"`,
+      'Content-Length': result.file.size.toString(),
+      'Cache-Control': 'private, no-cache',
     });
 
-    return new StreamableFile(stream);
+    res.end(result.buffer);
   }
+
+
+
+
 
   @ApiOperation({ summary: '获取缩略图', description: '获取图片的缩略图（公开接口）' })
   @ApiResponse({ status: 200, description: '缩略图内容' })
   @ApiResponse({ status: 404, description: '缩略图不存在' })
   @Public()
   @Get('thumbnails/:filename')
-  @Header('Content-Type', 'image/webp')
   async getThumbnail(
     @Param('filename') filename: string,
-    @Res({ passthrough: true }) res: Response,
+    @Res() res: Response,
   ) {
-    const stream = await this.uploadService.getThumbnailStream(filename);
+    const buffer = await this.uploadService.getThumbnailBuffer(filename);
     
     res.set({
+      'Content-Type': 'image/webp',
       'Cache-Control': 'public, max-age=31536000', // 1年缓存
     });
 
-    return new StreamableFile(stream);
+    res.end(buffer);
+  }
+
+  @ApiOperation({ summary: '生成安全访问令牌', description: '为文件生成临时访问令牌' })
+  @ApiResponse({ 
+    status: 200, 
+    description: '令牌生成成功',
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string', description: '访问令牌' },
+        secureUrl: { type: 'string', description: '安全访问URL' },
+        expiresAt: { type: 'string', format: 'date-time', description: '过期时间' }
+      }
+    }
+  })
+  @ApiResponse({ status: 401, description: '未授权访问' })
+  @ApiResponse({ status: 404, description: '文件不存在' })
+  @ApiBearerAuth('JWT-auth')
+  @Post(':id/token')
+  @RequirePermissions({ action: PermissionAction.READ, resource: PermissionResource.FILE })
+  async generateAccessToken(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.uploadService.generateAccessToken(id, user);
   }
 
   @ApiOperation({ summary: '获取文件详情', description: '根据ID获取文件详细信息' })
