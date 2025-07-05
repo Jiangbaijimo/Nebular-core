@@ -107,7 +107,12 @@ export class CategoryQueryDto {
 
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) {
+      return true; // 默认显示激活的分类
+    }
+    return value === 'true' || value === true;
+  })
   isActive?: boolean;
 
   @IsOptional()

@@ -72,7 +72,7 @@ export class CategoryService {
     // 搜索
     if (search) {
       queryBuilder.andWhere(
-        '(category.name ILIKE :search OR category.description ILIKE :search)',
+        '(category.name LIKE :search OR category.description LIKE :search)',
         { search: `%${search}%` },
       );
     }

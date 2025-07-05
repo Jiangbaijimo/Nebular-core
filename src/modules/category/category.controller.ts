@@ -42,9 +42,9 @@ export class CategoryController {
   @Get()
   async findAll(@Query() query: CategoryQueryDto) {
     // 公开接口只显示激活的分类
-    if (query.isActive === undefined) {
-      query.isActive = true;
-    }
+    // if (query.isActive === undefined) {
+    //   query.isActive = true;
+    // }
     return this.categoryService.findAll(query);
   }
 
