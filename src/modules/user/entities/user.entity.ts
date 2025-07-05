@@ -84,6 +84,12 @@ export class User {
   @Column({ nullable: true })
   lastLoginIp: string;
 
+  @Column({ nullable: true })
+  githubUsername: string;
+
+  @Column({ nullable: true })
+  googleEmail: string;
+
   @ManyToMany(() => Role, (role) => role.users)
   @JoinTable({
     name: 'user_roles',

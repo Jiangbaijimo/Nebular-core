@@ -47,3 +47,58 @@ export class RefreshTokenDto {
   @IsString({ message: '刷新令牌必须是字符串' })
   refreshToken: string;
 }
+
+export class AdminRegisterDto {
+  @IsEmail({}, { message: '请输入有效的邮箱地址' })
+  email: string;
+
+  @IsString({ message: '密码必须是字符串' })
+  @MinLength(6, { message: '密码长度至少6位' })
+  @MaxLength(20, { message: '密码长度不能超过20位' })
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]/, {
+    message: '密码必须包含大小写字母和数字',
+  })
+  password: string;
+
+  @IsOptional()
+  @IsString({ message: '用户名必须是字符串' })
+  @MinLength(3, { message: '用户名长度至少3位' })
+  @MaxLength(20, { message: '用户名长度不能超过20位' })
+  @Matches(/^[a-zA-Z0-9_]+$/, {
+    message: '用户名只能包含字母、数字和下划线',
+  })
+  username?: string;
+
+  @IsOptional()
+  @IsString({ message: '昵称必须是字符串' })
+  @MaxLength(50, { message: '昵称长度不能超过50位' })
+  nickname?: string;
+
+  @IsOptional()
+  @IsString({ message: '邀请码必须是字符串' })
+  inviteCode?: string;
+
+  @IsOptional()
+  @IsString({ message: 'GitHub用户名必须是字符串' })
+  @MaxLength(39, { message: 'GitHub用户名长度不能超过39位' })
+  githubUsername?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Google邮箱必须是字符串' })
+  @IsEmail({}, { message: '请输入有效的Google邮箱地址' })
+  googleEmail?: string;
+}
+
+export class GenerateInviteCodeDto {
+  @IsOptional()
+  @IsString({ message: '过期时间必须是字符串' })
+  @Matches(/^\d+[dhms]$/, {
+    message: '过期时间格式错误，例如：7d, 24h, 30m',
+  })
+  expiresIn?: string = '7d'; // 默认7天
+
+  @IsOptional()
+  @IsString({ message: '备注必须是字符串' })
+  @MaxLength(200, { message: '备注长度不能超过200位' })
+  note?: string;
+}

@@ -9,8 +9,10 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { UserService } from '../user/user.service';
 import { RedisService } from '../../common/redis/redis.service';
+import { SystemService } from '../system/system.service';
+import { InviteCodeService } from './invite-code.service';
 import { User, AuthProvider } from '../user/entities/user.entity';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, AdminRegisterDto, GenerateInviteCodeDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +21,8 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
+    private systemService: SystemService,
+    private inviteCodeService: InviteCodeService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -163,6 +167,165 @@ export class AuthService {
 
   async generateTokensForUser(user: User) {
     return this.generateTokens(user);
+  }
+
+  /**
+   * 检查博客是否已初始化
+   */
+  async checkBlogInitialization(): Promise<{
+    isInitialized: boolean;
+    requiresSetup: boolean;
+    allowRegistration: boolean;
+    requireInviteCode: boolean;
+  }> {
+    const isInitialized = await this.systemService.isBlogInitialized();
+    const allowRegistration = await this.systemService.getSetting('allow_registration') ?? true;
+    const requireInviteCode = await this.systemService.getSetting('require_invite_code') ?? false;
+
+    return {
+      isInitialized,
+      requiresSetup: !isInitialized,
+      allowRegistration,
+      requireInviteCode: isInitialized && requireInviteCode,
+    };
+  }
+
+  /**
+   * 管理员注册（首次初始化或通过邀请码）
+   */
+  async adminRegister(adminRegisterDto: AdminRegisterDto) {
+    const { email, password, username, nickname, inviteCode, githubUsername, googleEmail } = adminRegisterDto;
+    const isInitialized = await this.systemService.isBlogInitialized();
+
+    // 检查邮箱是否已存在
+    const existingUser = await this.userService.findByEmailWithPassword(email);
+    if (existingUser) {
+      throw new ConflictException('邮箱已被注册');
+    }
+
+    // 检查用户名是否已存在
+    if (username) {
+      const existingUsername = await this.userService.findByUsernameWithPassword(username);
+      if (existingUsername) {
+        throw new ConflictException('用户名已被使用');
+      }
+    }
+
+    // 如果博客已初始化，必须提供有效的邀请码
+    if (isInitialized) {
+      if (!inviteCode) {
+        throw new BadRequestException('博客已初始化，注册需要邀请码');
+      }
+      await this.inviteCodeService.validateInviteCode(inviteCode);
+    }
+
+    // 加密密码
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // 创建管理员用户
+    const user = await this.userService.createAdmin({
+      email,
+      password: hashedPassword,
+      username,
+      nickname,
+      provider: AuthProvider.LOCAL,
+      githubUsername,
+      googleEmail,
+    });
+
+    // 如果使用了邀请码，标记为已使用
+    if (isInitialized && inviteCode) {
+      await this.inviteCodeService.useInviteCode(inviteCode, user.id);
+    }
+
+    // 如果是首次初始化，标记博客为已初始化
+    if (!isInitialized) {
+      await this.systemService.markBlogAsInitialized();
+      // 设置默认配置
+      await this.systemService.setSetting('require_invite_code', true);
+    }
+
+    // 生成令牌
+    const tokens = await this.generateTokens(user);
+
+    return {
+      user: this.sanitizeUser(user),
+      ...tokens,
+      isFirstAdmin: !isInitialized,
+    };
+  }
+
+  /**
+   * 生成邀请码（仅管理员）
+   */
+  async generateInviteCode(
+    userId: number,
+    generateDto: GenerateInviteCodeDto,
+  ) {
+    // 验证用户是否为管理员
+    const user = await this.userService.findById(userId);
+    const isAdmin = user.roles.some(role => role.code === 'admin');
+    
+    if (!isAdmin) {
+      throw new UnauthorizedException('只有管理员可以生成邀请码');
+    }
+
+    return this.inviteCodeService.generateInviteCode(userId, generateDto);
+  }
+
+  /**
+   * 获取邀请码列表
+   */
+  async getInviteCodes(
+    userId: number,
+    options: {
+      page?: number;
+      limit?: number;
+      includeUsed?: boolean;
+    } = {},
+  ) {
+    // 验证用户是否为管理员
+    const user = await this.userService.findById(userId);
+    const isAdmin = user.roles.some(role => role.code === 'admin');
+    
+    if (!isAdmin) {
+      throw new UnauthorizedException('只有管理员可以查看邀请码');
+    }
+
+    return this.inviteCodeService.getInviteCodesByUser(userId, options);
+  }
+
+  /**
+   * 删除邀请码
+   */
+  async deleteInviteCode(inviteCodeId: number, userId: number) {
+    // 验证用户是否为管理员
+    const user = await this.userService.findById(userId);
+    const isAdmin = user.roles.some(role => role.code === 'admin');
+    
+    if (!isAdmin) {
+      throw new UnauthorizedException('只有管理员可以删除邀请码');
+    }
+
+    await this.inviteCodeService.deleteInviteCode(inviteCodeId, userId);
+    return { message: '邀请码删除成功' };
+  }
+
+  /**
+   * 验证邀请码（公开接口）
+   */
+  async validateInviteCode(code: string) {
+    const inviteCode = await this.inviteCodeService.validateInviteCode(code);
+    return {
+      valid: true,
+      expiresAt: inviteCode.expiresAt,
+      createdBy: {
+        id: inviteCode.createdBy.id,
+        username: inviteCode.createdBy.username,
+        nickname: inviteCode.createdBy.nickname,
+      },
+      note: inviteCode.note,
+    };
   }
 
   private async generateTokens(user: User) {

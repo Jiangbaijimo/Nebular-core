@@ -398,6 +398,65 @@ export class UserService {
     return this.findById(userId);
   }
 
+  /**
+   * 创建管理员用户
+   */
+  async createAdmin(createUserDto: CreateUserDto): Promise<User> {
+    const user = this.userRepository.create(createUserDto);
+    
+    // 获取或创建管理员角色
+    let adminRole = await this.roleRepository.findOne({
+      where: { code: 'admin' },
+    });
+    
+    if (!adminRole) {
+      // 如果没有管理员角色，创建一个
+      adminRole = this.roleRepository.create({
+        name: '超级管理员',
+        code: 'admin',
+        description: '系统超级管理员，拥有所有权限',
+        isSystem: true,
+      });
+      adminRole = await this.roleRepository.save(adminRole);
+    }
+
+    user.roles = [adminRole];
+    return this.userRepository.save(user);
+  }
+
+  /**
+   * 检查是否存在管理员用户
+   */
+  async hasAdminUser(): Promise<boolean> {
+    const adminRole = await this.roleRepository.findOne({
+      where: { code: 'admin' },
+      relations: ['users'],
+    });
+
+    return !!(adminRole && adminRole.users && adminRole.users.length > 0);
+  }
+
+  /**
+   * 获取用户总数
+   */
+  async getUserCount(): Promise<number> {
+    return this.userRepository.count();
+  }
+
+  /**
+   * 更新用户的OAuth信息
+   */
+  async updateOAuthInfo(
+    userId: number,
+    oauthData: {
+      githubUsername?: string;
+      googleEmail?: string;
+    },
+  ): Promise<User> {
+    await this.userRepository.update(userId, oauthData);
+    return this.findById(userId);
+  }
+
   async changeStatus(id: number, status: UserStatus): Promise<User> {
     const user = await this.findById(id);
     user.status = status;

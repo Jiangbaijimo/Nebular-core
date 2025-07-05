@@ -53,6 +53,16 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean({ message: '邮箱验证状态必须是布尔值' })
   emailVerified?: boolean;
+
+  @IsOptional()
+  @IsString({ message: 'GitHub用户名必须是字符串' })
+  @MaxLength(39, { message: 'GitHub用户名长度不能超过39位' })
+  githubUsername?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Google邮箱必须是字符串' })
+  @IsEmail({}, { message: '请输入有效的Google邮箱地址' })
+  googleEmail?: string;
 }
 
 export class UpdateUserDto {
@@ -75,6 +85,16 @@ export class UpdateUserDto {
   @IsString({ message: '个人简介必须是字符串' })
   @MaxLength(500, { message: '个人简介长度不能超过500位' })
   bio?: string;
+
+  @IsOptional()
+  @IsString({ message: 'GitHub用户名必须是字符串' })
+  @MaxLength(39, { message: 'GitHub用户名长度不能超过39位' })
+  githubUsername?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Google邮箱必须是字符串' })
+  @IsEmail({}, { message: '请输入有效的Google邮箱地址' })
+  googleEmail?: string;
 }
 
 export class ChangeUserStatusDto {
