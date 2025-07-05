@@ -41,4 +41,12 @@ export default registerAs('app', () => ({
     ttl: parseInt(process.env.THROTTLE_TTL || '60', 10),
     limit: parseInt(process.env.THROTTLE_LIMIT || '10', 10),
   },
+  
+  // CORS跨域配置
+  cors: {
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3001'],
+    methods: process.env.CORS_METHODS?.split(',') || ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: process.env.CORS_ALLOWED_HEADERS?.split(',') || ['Content-Type', 'Authorization'],
+    credentials: process.env.CORS_CREDENTIALS === 'true',
+  },
 }));

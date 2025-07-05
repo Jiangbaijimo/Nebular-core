@@ -23,8 +23,13 @@ async function bootstrap() {
   const port = configService.get<number>('app.port', 3000);
   const host = configService.get<string>('app.host', '0.0.0.0');
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api');
-  const corsOrigins = configService.get<string[]>('app.corsOrigins', ['http://localhost:3001']);
-  const appName = configService.get<string>('app.name', 'Blog API');
+  const corsConfig = configService.get('app.cors', {
+    origin: ['http://localhost:3001'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+  const appName = configService.get<string>('app.name', '博客后端系统');
   const appVersion = configService.get<string>('app.version', '1.0.0');
   const appDescription = configService.get<string>('app.description', 'A modern blog API built with NestJS');
   
@@ -33,10 +38,10 @@ async function bootstrap() {
   
   // 启用 CORS
   app.enableCors({
-    origin: corsOrigins,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    origin: corsConfig.origin,
+    methods: corsConfig.methods,
+    allowedHeaders: corsConfig.allowedHeaders,
+    credentials: corsConfig.credentials,
   });
   
   // 全局验证管道
