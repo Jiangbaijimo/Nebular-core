@@ -31,6 +31,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { User } from '../user/entities/user.entity';
 import { Request } from 'express';
 
@@ -197,6 +198,7 @@ export class CloudFunctionController {
 // 云函数执行控制器（公开访问）
 @ApiTags('云函数执行')
 @Controller('fn')
+@Public()
 export class CloudFunctionExecuteController {
   constructor(private readonly cloudFunctionService: CloudFunctionService) {}
 
