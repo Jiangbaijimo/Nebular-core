@@ -11,6 +11,7 @@ import {
   IsUrl,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BlogStatus } from '../entities/blog.entity';
 
 export class CreateBlogDto {
@@ -162,6 +163,7 @@ export class UpdateBlogDto {
 }
 
 export class BlogQueryDto {
+  @ApiPropertyOptional({ description: '页码', default: 1, example: 1 })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) {
@@ -172,6 +174,7 @@ export class BlogQueryDto {
   })
   page?: number = 1;
 
+  @ApiPropertyOptional({ description: '每页数量', default: 10, example: 10 })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) {
@@ -182,14 +185,27 @@ export class BlogQueryDto {
   })
   limit?: number = 10;
 
+  @ApiPropertyOptional({ 
+    description: '博客状态', 
+    enum: BlogStatus, 
+    example: BlogStatus.PUBLISHED 
+  })
   @IsOptional()
   @IsEnum(BlogStatus)
   status?: BlogStatus;
 
+  @ApiPropertyOptional({ 
+    description: '搜索关键词（标题、摘要、内容）', 
+    example: 'JavaScript' 
+  })
   @IsOptional()
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ 
+    description: '分类ID', 
+    example: 1 
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) {
@@ -201,6 +217,10 @@ export class BlogQueryDto {
   @IsNumber()
   categoryId?: number;
 
+  @ApiPropertyOptional({ 
+    description: '作者ID', 
+    example: 1 
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) {
@@ -212,14 +232,30 @@ export class BlogQueryDto {
   @IsNumber()
   authorId?: number;
 
+  @ApiPropertyOptional({ 
+    description: '标签', 
+    example: 'frontend' 
+  })
   @IsOptional()
   @IsString()
   tag?: string;
 
+  @ApiPropertyOptional({ 
+    description: '排序字段', 
+    enum: ['createdAt', 'publishedAt', 'viewCount', 'likeCount'],
+    default: 'createdAt',
+    example: 'createdAt'
+  })
   @IsOptional()
   @IsString()
   sortBy?: 'createdAt' | 'publishedAt' | 'viewCount' | 'likeCount' = 'createdAt';
 
+  @ApiPropertyOptional({ 
+    description: '排序方向', 
+    enum: ['ASC', 'DESC'],
+    default: 'DESC',
+    example: 'DESC'
+  })
   @IsOptional()
   @IsString()
   sortOrder?: 'ASC' | 'DESC' = 'DESC';

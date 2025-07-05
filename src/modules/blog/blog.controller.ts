@@ -37,7 +37,10 @@ export class BlogController {
     return this.blogService.create(createBlogDto, user);
   }
 
-  @ApiOperation({ summary: '获取博客列表', description: '获取已发布的博客列表（公开接口）' })
+  @ApiOperation({ 
+    summary: '获取博客列表', 
+    description: '获取已发布的博客列表（公开接口）\n\n支持的查询参数：\n- page: 页码（默认1）\n- limit: 每页数量（默认10）\n- search: 搜索关键词（标题、摘要、内容）\n- categoryId: 分类ID\n- tag: 标签\n- sortBy: 排序字段（createdAt, publishedAt, viewCount, likeCount）\n- sortOrder: 排序方向（ASC, DESC）\n\n示例：\n- /api/blogs?page=1&limit=10\n- /api/blogs?categoryId=1&page=1\n- /api/blogs?search=JavaScript&sortBy=viewCount&sortOrder=DESC' 
+  })
   @ApiResponse({ status: 200, description: '获取成功' })
   @Public()
   @Get()

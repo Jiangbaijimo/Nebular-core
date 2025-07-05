@@ -79,7 +79,7 @@ export class BlogService {
     // 搜索
     if (search) {
       queryBuilder.andWhere(
-        '(blog.title ILIKE :search OR blog.summary ILIKE :search OR blog.content ILIKE :search)',
+        '(blog.title LIKE :search OR blog.summary LIKE :search OR blog.content LIKE :search)',
         { search: `%${search}%` },
       );
     }
