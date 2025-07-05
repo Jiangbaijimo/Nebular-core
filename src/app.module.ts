@@ -59,7 +59,7 @@ import { UploadModule } from './modules/upload/upload.module';
     }),
     
     // 注册实体以供数据库初始化服务使用
-    TypeOrmModule.forFeature([User, Role, Permission, CloudFunction, CloudFunctionSecret, CloudFunctionLog, File]),
+    TypeOrmModule.forFeature([User, Role, Permission, Blog, Category, Comment, CloudFunction, CloudFunctionSecret, CloudFunctionLog, File]),
     
     // 限流模块
     ThrottlerModule.forRootAsync({

@@ -25,10 +25,12 @@ export class CloudFunctionInitService {
     this.logger.log('开始初始化示例云函数...');
 
     try {
-      // 查找管理员用户
-      const adminUser = await this.userRepository.findOne({
-        where: { email: 'admin@example.com' },
-      });
+      // 查找具有管理员角色的用户（第一个注册的用户会自动获得管理员权限）
+      const adminUser = await this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.roles', 'roles')
+        .where('roles.code = :code', { code: 'admin' })
+        .getOne();
 
       if (!adminUser) {
         this.logger.warn('未找到管理员用户，跳过云函数初始化');

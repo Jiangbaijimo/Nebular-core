@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Role } from '../../modules/user/entities/role.entity';
 import { Permission, PermissionAction, PermissionResource } from '../../modules/user/entities/permission.entity';
+import { Category } from '../../modules/category/entities/category.entity';
+import { Blog, BlogStatus } from '../../modules/blog/entities/blog.entity';
+import { User } from '../../modules/user/entities/user.entity';
 import { CloudFunctionInitService } from '../../modules/cloud-function/cloud-function-init.service';
 
 @Injectable()
@@ -14,6 +17,12 @@ export class DatabaseInitService implements OnModuleInit {
     private roleRepository: Repository<Role>,
     @InjectRepository(Permission)
     private permissionRepository: Repository<Permission>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
+    @InjectRepository(Blog)
+    private blogRepository: Repository<Blog>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private cloudFunctionInitService: CloudFunctionInitService,
   ) {}
 
@@ -22,7 +31,7 @@ export class DatabaseInitService implements OnModuleInit {
   }
 
   private async initializeRolesAndPermissions() {
-    this.logger.log('开始初始化角色和权限数据...');
+    this.logger.log('开始初始化系统基础数据...');
 
     try {
       // 创建基础权限
@@ -31,12 +40,18 @@ export class DatabaseInitService implements OnModuleInit {
       // 创建基础角色
       await this.createRoles();
       
+      // 创建基础分类
+      await this.createBaseCategories();
+      
+      // 创建基础博客
+      await this.createBaseBlogs();
+      
       // 初始化示例云函数
       await this.cloudFunctionInitService.initializeSampleCloudFunctions();
       
-      this.logger.log('角色和权限数据初始化完成');
+      this.logger.log('系统基础数据初始化完成');
     } catch (error) {
-      this.logger.error('初始化角色和权限数据失败:', error);
+      this.logger.error('初始化系统基础数据失败:', error);
     }
   }
 
@@ -212,6 +227,343 @@ export class DatabaseInitService implements OnModuleInit {
       
       await this.roleRepository.save(userRole);
       this.logger.log('创建普通用户角色');
+    }
+  }
+
+  private async createBaseCategories() {
+    this.logger.log('开始创建基础分类...');
+
+    const categories = [
+      // 首页分类
+      {
+        name: '首页',
+        slug: 'home',
+        description: '首页相关内容',
+        icon: '🏠',
+        color: '#3b82f6',
+        sort: 1,
+        children: [
+          { name: '自述', slug: 'about-me', description: '个人介绍', sort: 1 },
+          { name: '此站点', slug: 'about-site', description: '站点介绍', sort: 2 },
+          { name: '留言', slug: 'guestbook', description: '留言板', sort: 3 },
+          { name: '历史', slug: 'history', description: '历史记录', sort: 4 },
+          { name: '迭代', slug: 'changelog', description: '更新日志', sort: 5 },
+          { name: '关于友链', slug: 'about-friends', description: '友情链接说明', sort: 6 },
+        ],
+      },
+      // 文稿分类
+      {
+        name: '文稿',
+        slug: 'posts',
+        description: '文章内容',
+        icon: '📝',
+        color: '#10b981',
+        sort: 2,
+        children: [
+          { name: '生活', slug: 'life', description: '生活随笔', sort: 1 },
+          { name: '归档', slug: 'archive', description: '文章归档', sort: 2 },
+        ],
+      },
+      // 手记分类
+      {
+        name: '手记',
+        slug: 'notes',
+        description: '学习笔记',
+        icon: '📚',
+        color: '#f59e0b',
+        sort: 3,
+      },
+      // 时光分类
+      {
+        name: '时光',
+        slug: 'timeline',
+        description: '时光记录',
+        icon: '⏰',
+        color: '#8b5cf6',
+        sort: 4,
+        children: [
+          { name: '手记', slug: 'timeline-notes', description: '时光手记', sort: 1 },
+          { name: '文稿', slug: 'timeline-posts', description: '时光文稿', sort: 2 },
+          { name: '回忆', slug: 'memories', description: '回忆录', sort: 3 },
+          { name: '专栏', slug: 'columns', description: '专栏文章', sort: 4 },
+        ],
+      },
+      // 思考分类
+      {
+        name: '思考',
+        slug: 'thinking',
+        description: '思考感悟',
+        icon: '💭',
+        color: '#ef4444',
+        sort: 5,
+      },
+      // 更多分类
+      {
+        name: '更多',
+        slug: 'more',
+        description: '更多内容',
+        icon: '📦',
+        color: '#6b7280',
+        sort: 6,
+        children: [
+          { name: '友链', slug: 'friends', description: '友情链接', sort: 1 },
+          { name: '项目', slug: 'projects', description: '项目展示', sort: 2 },
+          { name: '一言', slug: 'hitokoto', description: '一言语录', sort: 3 },
+          { name: '跃迁', slug: 'transition', description: '跃迁记录', sort: 4 },
+        ],
+      },
+    ];
+
+    for (const categoryData of categories) {
+      const { children, ...parentData } = categoryData;
+      
+      // 检查父分类是否已存在
+      let parentCategory = await this.categoryRepository.findOne({
+        where: { slug: parentData.slug },
+      });
+
+      if (!parentCategory) {
+        parentCategory = this.categoryRepository.create(parentData);
+        await this.categoryRepository.save(parentCategory);
+        this.logger.log(`创建分类: ${parentData.name}`);
+      }
+
+      // 创建子分类
+      if (children && children.length > 0) {
+        for (const childData of children) {
+          const existingChild = await this.categoryRepository.findOne({
+            where: { slug: childData.slug },
+          });
+
+          if (!existingChild) {
+            const childCategory = this.categoryRepository.create({
+              ...childData,
+              parent: parentCategory,
+              parentId: parentCategory.id,
+            });
+            await this.categoryRepository.save(childCategory);
+            this.logger.log(`创建子分类: ${childData.name}`);
+          }
+        }
+      }
+    }
+  }
+
+  private async createBaseBlogs() {
+    this.logger.log('开始创建基础博客...');
+
+    // 查找具有管理员角色的用户（第一个注册的用户会自动获得管理员权限）
+    const adminUser = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .where('roles.code = :code', { code: 'admin' })
+      .getOne();
+
+    if (!adminUser) {
+      this.logger.warn('未找到管理员用户，跳过博客初始化');
+      return;
+    }
+
+    // 获取分类
+    const aboutMeCategory = await this.categoryRepository.findOne({
+      where: { slug: 'about-me' },
+    });
+    const aboutSiteCategory = await this.categoryRepository.findOne({
+      where: { slug: 'about-site' },
+    });
+    const guestbookCategory = await this.categoryRepository.findOne({
+      where: { slug: 'guestbook' },
+    });
+    const lifeCategory = await this.categoryRepository.findOne({
+      where: { slug: 'life' },
+    });
+
+    const blogs = [
+      {
+        title: '关于我',
+        slug: 'about-me',
+        summary: '个人介绍页面',
+        content: `# 关于我
+
+欢迎来到我的博客！
+
+## 个人简介
+
+这里是个人介绍的内容，你可以在这里分享你的故事、经历和想法。
+
+## 联系方式
+
+- 邮箱：your-email@example.com
+- GitHub：https://github.com/yourusername
+
+## 技能
+
+- 前端开发
+- 后端开发
+- 全栈开发
+
+感谢你的访问！`,
+        status: BlogStatus.PUBLISHED,
+        isTop: true,
+        allowComment: true,
+        tags: ['关于', '个人介绍'],
+        seoKeywords: ['关于我', '个人介绍', '博客'],
+        seoDescription: '个人介绍页面，了解博主的基本信息',
+        categories: aboutMeCategory ? [aboutMeCategory] : [],
+      },
+      {
+        title: '关于此站点',
+        slug: 'about-site',
+        summary: '站点介绍和技术栈',
+        content: `# 关于此站点
+
+## 技术栈
+
+本站点采用现代化的技术栈构建：
+
+### 后端
+- **框架**: NestJS
+- **数据库**: MySQL
+- **缓存**: Redis
+- **认证**: JWT
+- **文档**: Swagger
+
+### 前端
+- **框架**: React/Vue (可选)
+- **样式**: Tailwind CSS
+- **构建工具**: Vite
+
+## 功能特性
+
+- 📝 博客文章管理
+- 🏷️ 分类标签系统
+- 💬 评论系统
+- 📁 文件上传
+- ☁️ 云函数支持
+- 🔐 权限管理
+- 📊 数据统计
+
+## 开源
+
+本项目基于开源协议，欢迎贡献代码！`,
+        status: BlogStatus.PUBLISHED,
+        isTop: false,
+        allowComment: true,
+        tags: ['技术', '站点介绍', 'NestJS'],
+        seoKeywords: ['站点介绍', '技术栈', 'NestJS', '博客系统'],
+        seoDescription: '介绍本站点的技术栈和功能特性',
+        categories: aboutSiteCategory ? [aboutSiteCategory] : [],
+      },
+      {
+        title: '留言板',
+        slug: 'guestbook',
+        summary: '欢迎在这里留言',
+        content: `# 留言板
+
+欢迎来到留言板！
+
+## 留言须知
+
+1. 请文明留言，禁止发布违法违规内容
+2. 支持 Markdown 语法
+3. 留言会经过审核后显示
+4. 欢迎交流技术、分享想法
+
+## 友情提示
+
+- 可以在评论区留下你的想法
+- 如果有技术问题，欢迎讨论
+- 也可以分享有趣的网站或资源
+
+期待你的留言！ 😊`,
+        status: BlogStatus.PUBLISHED,
+        isTop: false,
+        allowComment: true,
+        tags: ['留言板', '交流'],
+        seoKeywords: ['留言板', '交流', '评论'],
+        seoDescription: '博客留言板，欢迎留言交流',
+        categories: guestbookCategory ? [guestbookCategory] : [],
+      },
+      {
+        title: '欢迎来到我的博客',
+        slug: 'welcome',
+        summary: '博客的第一篇文章',
+        content: `# 欢迎来到我的博客
+
+这是博客的第一篇文章，标志着这个个人空间的正式启动！
+
+## 博客的初衷
+
+创建这个博客的目的是：
+
+- 📝 记录学习和工作中的心得体会
+- 🤝 与同行交流技术和想法
+- 📚 整理和分享有价值的知识
+- 🌱 见证自己的成长历程
+
+## 内容规划
+
+博客将主要包含以下内容：
+
+### 技术文章
+- 前端开发经验
+- 后端架构设计
+- 数据库优化
+- 系统运维
+
+### 生活随笔
+- 读书笔记
+- 旅行见闻
+- 生活感悟
+- 兴趣爱好
+
+### 项目分享
+- 开源项目
+- 实战案例
+- 解决方案
+
+## 期待
+
+希望这个博客能够：
+- 帮助到有需要的朋友
+- 促进技术交流和学习
+- 记录美好的时光
+
+感谢你的访问，期待与你的交流！`,
+        status: BlogStatus.PUBLISHED,
+        isTop: false,
+        allowComment: true,
+        tags: ['欢迎', '博客', '开始'],
+        seoKeywords: ['博客', '欢迎', '技术分享'],
+        seoDescription: '博客的第一篇文章，欢迎来到我的个人博客',
+        categories: lifeCategory ? [lifeCategory] : [],
+      },
+    ];
+
+    for (const blogData of blogs) {
+      const existingBlog = await this.blogRepository.findOne({
+        where: { slug: blogData.slug },
+      });
+
+      if (!existingBlog) {
+        const { categories, ...blogInfo } = blogData;
+        const blog = this.blogRepository.create({
+          ...blogInfo,
+          author: adminUser,
+          authorId: adminUser.id,
+          publishedAt: new Date(),
+        });
+
+        const savedBlog = await this.blogRepository.save(blog);
+
+        // 关联分类
+        if (categories && categories.length > 0) {
+          savedBlog.categories = categories;
+          await this.blogRepository.save(savedBlog);
+        }
+
+        this.logger.log(`创建博客: ${blogData.title}`);
+      }
     }
   }
 }
