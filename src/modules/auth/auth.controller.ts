@@ -121,9 +121,23 @@ export class AuthController {
 
   @ApiOperation({ 
     summary: '检查博客初始化状态', 
-    description: '检查博客是否已完成初始化，用于前端判断注册流程' 
+    description: '检查博客是否已完成初始化，包含管理员用户状态和用户数量信息，支持自动修复不一致状态' 
   })
-  @ApiResponse({ status: 200, description: '检查成功' })
+  @ApiResponse({ 
+    status: 200, 
+    description: '检查成功',
+    schema: {
+      type: 'object',
+      properties: {
+        isInitialized: { type: 'boolean', description: '是否已初始化' },
+        requiresSetup: { type: 'boolean', description: '是否需要设置' },
+        allowRegistration: { type: 'boolean', description: '是否允许注册' },
+        requireInviteCode: { type: 'boolean', description: '是否需要邀请码' },
+        adminUserExists: { type: 'boolean', description: '是否存在管理员用户' },
+        userCount: { type: 'number', description: '用户总数' }
+      }
+    }
+  })
   @Public()
   @Get('check-initialization')
   async checkInitialization() {

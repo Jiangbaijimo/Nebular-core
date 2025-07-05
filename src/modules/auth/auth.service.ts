@@ -177,16 +177,39 @@ export class AuthService {
     requiresSetup: boolean;
     allowRegistration: boolean;
     requireInviteCode: boolean;
+    adminUserExists: boolean;
+    userCount: number;
   }> {
-    const isInitialized = await this.systemService.isBlogInitialized();
-    const allowRegistration = await this.systemService.getSetting('allow_registration') ?? true;
-    const requireInviteCode = await this.systemService.getSetting('require_invite_code') ?? false;
+    // 并行获取所有需要的信息
+    const [isInitialized, allowRegistration, requireInviteCode, adminUserExists, userCount] = await Promise.all([
+      this.systemService.isBlogInitialized(),
+      this.systemService.getSetting('allow_registration'),
+      this.systemService.getSetting('require_invite_code'),
+      this.userService.hasAdminUser(),
+      this.userService.getUserCount(),
+    ]);
+
+    // 如果系统设置显示未初始化，但已经有管理员用户，则自动标记为已初始化
+    if (!isInitialized && adminUserExists) {
+      await this.systemService.markBlogAsInitialized();
+      await this.systemService.initializeDefaultSettings();
+      return {
+        isInitialized: true,
+        requiresSetup: false,
+        allowRegistration: allowRegistration ?? true,
+        requireInviteCode: true, // 有管理员后默认需要邀请码
+        adminUserExists: true,
+        userCount,
+      };
+    }
 
     return {
       isInitialized,
       requiresSetup: !isInitialized,
-      allowRegistration,
-      requireInviteCode: isInitialized && requireInviteCode,
+      allowRegistration: allowRegistration ?? true,
+      requireInviteCode: isInitialized && (requireInviteCode ?? false),
+      adminUserExists,
+      userCount,
     };
   }
 
@@ -238,11 +261,16 @@ export class AuthService {
       await this.inviteCodeService.useInviteCode(inviteCode, user.id);
     }
 
-    // 如果是首次初始化，标记博客为已初始化
+    // 如果是首次初始化，完成初始化流程
+    let isFirstAdmin = false;
     if (!isInitialized) {
+      isFirstAdmin = true;
+      // 标记博客为已初始化
       await this.systemService.markBlogAsInitialized();
       // 设置默认配置
       await this.systemService.setSetting('require_invite_code', true);
+      // 初始化其他默认设置
+      await this.systemService.initializeDefaultSettings();
     }
 
     // 生成令牌
@@ -251,7 +279,8 @@ export class AuthService {
     return {
       user: this.sanitizeUser(user),
       ...tokens,
-      isFirstAdmin: !isInitialized,
+      isFirstAdmin,
+      message: isFirstAdmin ? '恭喜！博客初始化完成，您已成为管理员' : '注册成功',
     };
   }
 

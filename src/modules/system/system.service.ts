@@ -25,11 +25,17 @@ export class SystemService {
    * 标记博客为已初始化
    */
   async markBlogAsInitialized(): Promise<void> {
+    // 先查找现有记录
     let setting = await this.systemSettingRepository.findOne({
       where: { key: 'blog_initialized' },
     });
 
-    if (!setting) {
+    if (setting) {
+      // 如果记录存在，只更新值
+      setting.setValue(true);
+      await this.systemSettingRepository.save(setting);
+    } else {
+      // 如果记录不存在，创建新记录
       setting = this.systemSettingRepository.create({
         key: 'blog_initialized',
         value: 'true',
@@ -37,11 +43,8 @@ export class SystemService {
         description: '博客是否已完成初始化',
         isSystem: true,
       });
-    } else {
-      setting.setValue(true);
+      await this.systemSettingRepository.save(setting);
     }
-
-    await this.systemSettingRepository.save(setting);
   }
 
   /**
@@ -65,22 +68,26 @@ export class SystemService {
     description?: string,
     isSystem: boolean = false,
   ): Promise<void> {
+    // 查找现有设置
     let setting = await this.systemSettingRepository.findOne({
       where: { key },
     });
 
     if (!setting) {
+      // 创建新设置
       setting = this.systemSettingRepository.create({
         key,
         type,
         description,
         isSystem,
       });
-    }
-
-    setting.setValue(value);
-    if (description) {
-      setting.description = description;
+      setting.setValue(value);
+    } else {
+      // 更新现有设置
+      setting.setValue(value);
+      if (description) {
+        setting.description = description;
+      }
     }
 
     await this.systemSettingRepository.save(setting);
@@ -114,13 +121,6 @@ export class SystemService {
   async initializeDefaultSettings(): Promise<void> {
     const defaultSettings = [
       {
-        key: 'blog_initialized',
-        value: false,
-        type: SettingType.BOOLEAN,
-        description: '博客是否已完成初始化',
-        isSystem: true,
-      },
-      {
         key: 'site_title',
         value: '我的博客',
         type: SettingType.STRING,
@@ -150,12 +150,21 @@ export class SystemService {
       },
     ];
 
-    for (const settingData of defaultSettings) {
-      const existing = await this.systemSettingRepository.findOne({
-        where: { key: settingData.key },
-      });
+    // 批量检查现有设置
+    const existingKeys = await this.systemSettingRepository
+      .createQueryBuilder('setting')
+      .select('setting.key')
+      .where('setting.key IN (:...keys)', { 
+        keys: defaultSettings.map(s => s.key) 
+      })
+      .getMany();
+    
+    const existingKeySet = new Set(existingKeys.map(s => s.key));
 
-      if (!existing) {
+    // 只创建不存在的设置
+    const newSettings = defaultSettings
+      .filter(settingData => !existingKeySet.has(settingData.key))
+      .map(settingData => {
         const setting = this.systemSettingRepository.create({
           key: settingData.key,
           type: settingData.type,
@@ -163,8 +172,11 @@ export class SystemService {
           isSystem: settingData.isSystem,
         });
         setting.setValue(settingData.value);
-        await this.systemSettingRepository.save(setting);
-      }
+        return setting;
+      });
+
+    if (newSettings.length > 0) {
+      await this.systemSettingRepository.save(newSettings);
     }
   }
 }
