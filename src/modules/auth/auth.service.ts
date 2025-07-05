@@ -10,9 +10,8 @@ import * as bcrypt from 'bcryptjs';
 import { UserService } from '../user/user.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { SystemService } from '../system/system.service';
-import { InviteCodeService } from './invite-code.service';
 import { User, AuthProvider } from '../user/entities/user.entity';
-import { LoginDto, RegisterDto, AdminRegisterDto, GenerateInviteCodeDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, AdminRegisterDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -22,11 +21,10 @@ export class AuthService {
     private configService: ConfigService,
     private redisService: RedisService,
     private systemService: SystemService,
-    private inviteCodeService: InviteCodeService,
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const { email, password, username, nickname } = registerDto;
+    const { email } = registerDto;
 
     // 检查邮箱是否已存在
     const existingUser = await this.userService.findByEmailWithPassword(email);
@@ -34,25 +32,44 @@ export class AuthService {
       throw new ConflictException('邮箱已被注册');
     }
 
-    // 检查用户名是否已存在
-    if (username) {
-      const existingUsername = await this.userService.findByUsernameWithPassword(username);
-      if (existingUsername) {
-        throw new ConflictException('用户名已被使用');
-      }
+    // 检查是否为第一个用户
+    const userCount = await this.userService.getUserCount();
+    const isFirstUser = userCount === 0;
+
+    // 生成随机用户名和昵称
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const username = `user_${randomSuffix}`;
+    const nickname = `用户${randomSuffix}`;
+    
+    // 生成随机密码
+    const randomPassword = Math.random().toString(36).substring(2, 12) + 'A1';
+    const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+    let user;
+    if (isFirstUser) {
+      // 第一个用户创建为管理员
+      user = await this.userService.createAdmin({
+        email,
+        password: hashedPassword,
+        username,
+        nickname,
+        provider: AuthProvider.LOCAL,
+      });
+      
+      // 标记博客为已初始化
+      await this.systemService.markBlogAsInitialized();
+      // 初始化默认设置
+      await this.systemService.initializeDefaultSettings();
+    } else {
+      // 后续用户创建为普通用户
+      user = await this.userService.create({
+        email,
+        password: hashedPassword,
+        username,
+        nickname,
+        provider: AuthProvider.LOCAL,
+      });
     }
-
-    // 加密密码
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // 创建用户（会自动处理第一个用户的管理员权限分配）
-    const user = await this.userService.create({
-      email,
-      password: hashedPassword,
-      username,
-      nickname,
-      provider: AuthProvider.LOCAL,
-    });
 
     // 生成令牌
     const tokens = await this.generateTokens(user);
@@ -60,6 +77,9 @@ export class AuthService {
     return {
       user: this.sanitizeUser(user),
       ...tokens,
+      isFirstUser,
+      message: isFirstUser ? '恭喜！您是第一个用户，已自动成为管理员' : '注册成功',
+      temporaryPassword: randomPassword, // 返回临时密码供用户使用
     };
   }
 
@@ -176,15 +196,13 @@ export class AuthService {
     isInitialized: boolean;
     requiresSetup: boolean;
     allowRegistration: boolean;
-    requireInviteCode: boolean;
     adminUserExists: boolean;
     userCount: number;
   }> {
     // 并行获取所有需要的信息
-    const [isInitialized, allowRegistration, requireInviteCode, adminUserExists, userCount] = await Promise.all([
+    const [isInitialized, allowRegistration, adminUserExists, userCount] = await Promise.all([
       this.systemService.isBlogInitialized(),
       this.systemService.getSetting('allow_registration'),
-      this.systemService.getSetting('require_invite_code'),
       this.userService.hasAdminUser(),
       this.userService.getUserCount(),
     ]);
@@ -197,7 +215,6 @@ export class AuthService {
         isInitialized: true,
         requiresSetup: false,
         allowRegistration: allowRegistration ?? true,
-        requireInviteCode: true, // 有管理员后默认需要邀请码
         adminUserExists: true,
         userCount,
       };
@@ -207,18 +224,22 @@ export class AuthService {
       isInitialized,
       requiresSetup: !isInitialized,
       allowRegistration: allowRegistration ?? true,
-      requireInviteCode: isInitialized && (requireInviteCode ?? false),
       adminUserExists,
       userCount,
     };
   }
 
   /**
-   * 管理员注册（首次初始化或通过邀请码）
+   * 管理员注册（仅用于首次初始化）
    */
   async adminRegister(adminRegisterDto: AdminRegisterDto) {
-    const { email, password, username, nickname, inviteCode, githubUsername, googleEmail } = adminRegisterDto;
+    const { email, password, username, nickname, githubUsername, googleEmail } = adminRegisterDto;
     const isInitialized = await this.systemService.isBlogInitialized();
+
+    // 如果博客已初始化，不允许通过此接口注册
+    if (isInitialized) {
+      throw new BadRequestException('博客已初始化，请使用普通注册接口');
+    }
 
     // 检查邮箱是否已存在
     const existingUser = await this.userService.findByEmailWithPassword(email);
@@ -232,14 +253,6 @@ export class AuthService {
       if (existingUsername) {
         throw new ConflictException('用户名已被使用');
       }
-    }
-
-    // 如果博客已初始化，必须提供有效的邀请码
-    if (isInitialized) {
-      if (!inviteCode) {
-        throw new BadRequestException('博客已初始化，注册需要邀请码');
-      }
-      await this.inviteCodeService.validateInviteCode(inviteCode);
     }
 
     // 加密密码
@@ -256,22 +269,10 @@ export class AuthService {
       googleEmail,
     });
 
-    // 如果使用了邀请码，标记为已使用
-    if (isInitialized && inviteCode) {
-      await this.inviteCodeService.useInviteCode(inviteCode, user.id);
-    }
-
-    // 如果是首次初始化，完成初始化流程
-    let isFirstAdmin = false;
-    if (!isInitialized) {
-      isFirstAdmin = true;
-      // 标记博客为已初始化
-      await this.systemService.markBlogAsInitialized();
-      // 设置默认配置
-      await this.systemService.setSetting('require_invite_code', true);
-      // 初始化其他默认设置
-      await this.systemService.initializeDefaultSettings();
-    }
+    // 标记博客为已初始化
+    await this.systemService.markBlogAsInitialized();
+    // 初始化默认设置
+    await this.systemService.initializeDefaultSettings();
 
     // 生成令牌
     const tokens = await this.generateTokens(user);
@@ -279,81 +280,8 @@ export class AuthService {
     return {
       user: this.sanitizeUser(user),
       ...tokens,
-      isFirstAdmin,
-      message: isFirstAdmin ? '恭喜！博客初始化完成，您已成为管理员' : '注册成功',
-    };
-  }
-
-  /**
-   * 生成邀请码（仅管理员）
-   */
-  async generateInviteCode(
-    userId: number,
-    generateDto: GenerateInviteCodeDto,
-  ) {
-    // 验证用户是否为管理员
-    const user = await this.userService.findById(userId);
-    const isAdmin = user.roles.some(role => role.code === 'admin');
-    
-    if (!isAdmin) {
-      throw new UnauthorizedException('只有管理员可以生成邀请码');
-    }
-
-    return this.inviteCodeService.generateInviteCode(userId, generateDto);
-  }
-
-  /**
-   * 获取邀请码列表
-   */
-  async getInviteCodes(
-    userId: number,
-    options: {
-      page?: number;
-      limit?: number;
-      includeUsed?: boolean;
-    } = {},
-  ) {
-    // 验证用户是否为管理员
-    const user = await this.userService.findById(userId);
-    const isAdmin = user.roles.some(role => role.code === 'admin');
-    
-    if (!isAdmin) {
-      throw new UnauthorizedException('只有管理员可以查看邀请码');
-    }
-
-    return this.inviteCodeService.getInviteCodesByUser(userId, options);
-  }
-
-  /**
-   * 删除邀请码
-   */
-  async deleteInviteCode(inviteCodeId: number, userId: number) {
-    // 验证用户是否为管理员
-    const user = await this.userService.findById(userId);
-    const isAdmin = user.roles.some(role => role.code === 'admin');
-    
-    if (!isAdmin) {
-      throw new UnauthorizedException('只有管理员可以删除邀请码');
-    }
-
-    await this.inviteCodeService.deleteInviteCode(inviteCodeId, userId);
-    return { message: '邀请码删除成功' };
-  }
-
-  /**
-   * 验证邀请码（公开接口）
-   */
-  async validateInviteCode(code: string) {
-    const inviteCode = await this.inviteCodeService.validateInviteCode(code);
-    return {
-      valid: true,
-      expiresAt: inviteCode.expiresAt,
-      createdBy: {
-        id: inviteCode.createdBy.id,
-        username: inviteCode.createdBy.username,
-        nickname: inviteCode.createdBy.nickname,
-      },
-      note: inviteCode.note,
+      isFirstAdmin: true,
+      message: '恭喜！博客初始化完成，您已成为管理员',
     };
   }
 

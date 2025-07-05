@@ -34,7 +34,6 @@ import { CloudFunction } from './modules/cloud-function/entities/cloud-function.
 import { CloudFunctionSecret } from './modules/cloud-function/entities/cloud-function-secret.entity';
 import { CloudFunctionLog } from './modules/cloud-function/entities/cloud-function-log.entity';
 import { File } from './modules/upload/entities/file.entity';
-import { InviteCode } from './modules/auth/entities/invite-code.entity';
 import { SystemSetting } from './modules/system/entities/system-setting.entity';
 
 // 模块
@@ -62,7 +61,7 @@ import { SystemModule } from './modules/system/system.module';
     }),
     
     // 注册实体以供数据库初始化服务使用
-    TypeOrmModule.forFeature([User, Role, Permission, Blog, Category, Comment, CloudFunction, CloudFunctionSecret, CloudFunctionLog, File, InviteCode, SystemSetting]),
+    TypeOrmModule.forFeature([User, Role, Permission, Blog, Category, Comment, CloudFunction, CloudFunctionSecret, CloudFunctionLog, File, SystemSetting]),
     
     // 限流模块
     ThrottlerModule.forRootAsync({

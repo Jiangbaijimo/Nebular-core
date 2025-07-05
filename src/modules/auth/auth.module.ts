@@ -5,18 +5,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { InviteCodeService } from './invite-code.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GithubStrategy } from './strategies/github.strategy';
 import { UserModule } from '../user/user.module';
 import { SystemModule } from '../system/system.module';
 import { RedisService } from '../../common/redis/redis.service';
-import { InviteCode } from './entities/invite-code.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([InviteCode]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -34,12 +31,11 @@ import { InviteCode } from './entities/invite-code.entity';
   controllers: [AuthController],
   providers: [
     AuthService,
-    InviteCodeService,
     JwtStrategy,
     GoogleStrategy,
     GithubStrategy,
     RedisService,
   ],
-  exports: [AuthService, InviteCodeService, JwtModule],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
