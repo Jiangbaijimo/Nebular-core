@@ -127,6 +127,7 @@ export class AuthController {
 
   @Public()
   @Get('github/callback')
+  @UseGuards(AuthGuard('github'))
   async githubAuthCallback(@Req() req: Request, @Res() res: Response) {
     try {
       console.log('GitHub OAuth回调开始，req.user:', req.user);
@@ -138,47 +139,23 @@ export class AuthController {
         throw new Error(`GitHub OAuth错误: ${errorDescription}`);
       }
       
-      // 手动触发GitHub认证
-      const passport = require('passport');
+      if (!req.user) {
+        throw new Error('GitHub OAuth认证失败：未获取到用户信息');
+      }
       
-      passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
-        console.log('GitHub认证结果 - err:', err, 'user:', user, 'info:', info);
-        
-        if (err) {
-          console.error('GitHub OAuth认证错误:', err);
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(err.message || 'GitHub认证失败')}`);
-        }
-        
-        if (!user) {
-          console.error('GitHub OAuth认证失败：未获取到用户信息');
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent('GitHub认证失败：未获取到用户信息')}`);
-        }
-        
-        // 处理成功的认证
-        this.handleSuccessfulGithubAuth(user, res).catch(error => {
-          console.error('处理GitHub认证成功后的逻辑失败:', error);
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-          res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error.message)}`);
-        });
-      })(req, res);
+      const user = await this.authService.validateOAuthUser(req.user as any);
+      const tokens = await this.authService.generateTokensForUser(user);
       
+      // 重定向到前端，携带 token
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
     } catch (error) {
       console.error('GitHub OAuth回调错误:', error);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
       res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error.message)}`);
     }
   }
-  
-  private async handleSuccessfulGithubAuth(oauthUser: any, res: Response) {
-    const user = await this.authService.validateOAuthUser(oauthUser);
-    const tokens = await this.authService.generateTokensForUser(user);
-    
-    // 重定向到前端，携带 token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
-  }
+
 
   @ApiOperation({ 
     summary: '检查博客初始化状态', 
