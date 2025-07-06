@@ -190,6 +190,57 @@ export class AuthService {
   }
 
   /**
+   * 生成临时授权码
+   */
+  async generateAuthCode(user: User): Promise<string> {
+    // 生成随机授权码
+    const authCode = Math.random().toString(36).substring(2, 15) + 
+                     Math.random().toString(36).substring(2, 15);
+    
+    // 将授权码和用户信息存储到Redis，设置5分钟过期
+    const codeData = {
+      userId: user.id,
+      email: user.email,
+      createdAt: new Date().toISOString()
+    };
+    
+    await this.redisService.set(`auth_code:${authCode}`, JSON.stringify(codeData), 300); // 5分钟过期
+    
+    return authCode;
+  }
+
+  /**
+   * 验证授权码并生成token
+   */
+  async exchangeCodeForTokens(code: string) {
+    // 从Redis获取授权码数据
+    const codeDataStr = await this.redisService.get(`auth_code:${code}`);
+    
+    if (!codeDataStr) {
+      throw new UnauthorizedException('授权码无效或已过期');
+    }
+    
+    const codeData = JSON.parse(codeDataStr);
+    
+    // 获取用户信息
+    const user = await this.userService.findById(codeData.userId);
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+    
+    // 删除已使用的授权码
+    await this.redisService.del(`auth_code:${code}`);
+    
+    // 生成token
+    const tokens = await this.generateTokens(user);
+    
+    return {
+      user: this.sanitizeUser(user),
+      ...tokens,
+    };
+  }
+
+  /**
    * 检查博客是否已初始化
    */
   async checkBlogInitialization(): Promise<{

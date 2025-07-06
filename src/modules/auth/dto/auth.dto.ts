@@ -26,6 +26,12 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
+export class ExchangeCodeDto {
+  @IsString({ message: '授权码必须是字符串' })
+  @MinLength(1, { message: '授权码不能为空' })
+  code: string;
+}
+
 export class AdminRegisterDto {
   @IsEmail({}, { message: '请输入有效的邮箱地址' })
   email: string;

@@ -14,7 +14,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagg
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { OAuthConfigService } from './services/oauth-config.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, AdminRegisterDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, RefreshTokenDto, AdminRegisterDto, ExchangeCodeDto } from './dto/auth.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -105,11 +105,12 @@ export class AuthController {
       }
       
       const user = await this.authService.validateOAuthUser(req.user as any);
-      const tokens = await this.authService.generateTokensForUser(user);
+      // 生成临时授权码
+      const authCode = await this.authService.generateAuthCode(user);
       
-      // 重定向到前端，携带 token
+      // 重定向到前端，携带授权码
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-      res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+      res.redirect(`${frontendUrl}/auth/callback?code=${authCode}`);
     } catch (error) {
       console.error('Google OAuth回调错误:', error);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -144,11 +145,12 @@ export class AuthController {
       }
       
       const user = await this.authService.validateOAuthUser(req.user as any);
-      const tokens = await this.authService.generateTokensForUser(user);
+      // 生成临时授权码
+      const authCode = await this.authService.generateAuthCode(user);
       
-      // 重定向到前端，携带 token
+      // 重定向到前端，携带授权码
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-      res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+      res.redirect(`${frontendUrl}/auth/callback?code=${authCode}`);
     } catch (error) {
       console.error('GitHub OAuth回调错误:', error);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -156,6 +158,18 @@ export class AuthController {
     }
   }
 
+  @ApiOperation({ 
+    summary: '授权码交换令牌', 
+    description: '使用OAuth授权码交换访问令牌和刷新令牌' 
+  })
+  @ApiResponse({ status: 200, description: '交换成功' })
+  @ApiResponse({ status: 401, description: '授权码无效或已过期' })
+  @Public()
+  @Post('exchange-code')
+  @HttpCode(HttpStatus.OK)
+  async exchangeCode(@Body() exchangeCodeDto: ExchangeCodeDto) {
+    return this.authService.exchangeCodeForTokens(exchangeCodeDto.code);
+  }
 
   @ApiOperation({ 
     summary: '检查博客初始化状态', 
