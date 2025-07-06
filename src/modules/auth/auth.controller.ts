@@ -13,6 +13,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { OAuthConfigService } from './services/oauth-config.service';
 import { RegisterDto, LoginDto, RefreshTokenDto, AdminRegisterDto } from './dto/auth.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
@@ -22,7 +23,10 @@ import { User } from '../user/entities/user.entity';
 @ApiTags('认证管理')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly oauthConfigService: OAuthConfigService,
+  ) {}
 
   @ApiOperation({ summary: '用户注册', description: '创建新用户账户' })
   @ApiResponse({ status: 201, description: '注册成功' })
@@ -95,10 +99,22 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const user = await this.authService.validateOAuthUser(req.user as any);
-    const tokens = await this.authService.generateTokensForUser(user);
-    // 重定向到前端，携带 token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+    try {
+      if (!req.user) {
+        throw new Error('Google OAuth认证失败：未获取到用户信息');
+      }
+      
+      const user = await this.authService.validateOAuthUser(req.user as any);
+      const tokens = await this.authService.generateTokensForUser(user);
+      
+      // 重定向到前端，携带 token
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+    } catch (error) {
+      console.error('Google OAuth回调错误:', error);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error.message)}`);
+    }
   }
 
   // GitHub OAuth
@@ -111,12 +127,57 @@ export class AuthController {
 
   @Public()
   @Get('github/callback')
-  @UseGuards(AuthGuard('github'))
   async githubAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const user = await this.authService.validateOAuthUser(req.user as any);
+    try {
+      console.log('GitHub OAuth回调开始，req.user:', req.user);
+      console.log('GitHub OAuth回调开始，req.query:', req.query);
+      
+      // 检查是否有OAuth错误
+      if (req.query.error) {
+        const errorDescription = req.query.error_description || req.query.error;
+        throw new Error(`GitHub OAuth错误: ${errorDescription}`);
+      }
+      
+      // 手动触发GitHub认证
+      const passport = require('passport');
+      
+      passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
+        console.log('GitHub认证结果 - err:', err, 'user:', user, 'info:', info);
+        
+        if (err) {
+          console.error('GitHub OAuth认证错误:', err);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(err.message || 'GitHub认证失败')}`);
+        }
+        
+        if (!user) {
+          console.error('GitHub OAuth认证失败：未获取到用户信息');
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent('GitHub认证失败：未获取到用户信息')}`);
+        }
+        
+        // 处理成功的认证
+        this.handleSuccessfulGithubAuth(user, res).catch(error => {
+          console.error('处理GitHub认证成功后的逻辑失败:', error);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+          res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error.message)}`);
+        });
+      })(req, res);
+      
+    } catch (error) {
+      console.error('GitHub OAuth回调错误:', error);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error.message)}`);
+    }
+  }
+  
+  private async handleSuccessfulGithubAuth(oauthUser: any, res: Response) {
+    const user = await this.authService.validateOAuthUser(oauthUser);
     const tokens = await this.authService.generateTokensForUser(user);
+    
     // 重定向到前端，携带 token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
   }
 
   @ApiOperation({ 
@@ -156,5 +217,41 @@ export class AuthController {
     return this.authService.adminRegister(adminRegisterDto);
   }
 
+  @ApiOperation({ 
+    summary: 'OAuth 配置健康检查', 
+    description: '检查 OAuth 提供商的配置状态，用于开发调试' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: '检查成功',
+    schema: {
+      type: 'object',
+      properties: {
+        availableProviders: { 
+          type: 'array', 
+          items: { type: 'string' },
+          description: '可用的 OAuth 提供商列表' 
+        },
+        providerStatus: {
+          type: 'object',
+          description: '各提供商的配置状态'
+        }
+      }
+    }
+  })
+  @Public()
+  @Get('oauth/health')
+  async checkOAuthHealth() {
+    const availableProviders = this.oauthConfigService.getAvailableProviders();
+    
+    return {
+      availableProviders,
+      providerStatus: {
+        google: this.oauthConfigService.isProviderAvailable('google'),
+        github: this.oauthConfigService.isProviderAvailable('github'),
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
 
 }

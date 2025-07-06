@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GithubStrategy } from './strategies/github.strategy';
+import { OAuthConfigService } from './services/oauth-config.service';
 import { UserModule } from '../user/user.module';
 import { SystemModule } from '../system/system.module';
 import { RedisService } from '../../common/redis/redis.service';
@@ -34,6 +35,7 @@ import { RedisService } from '../../common/redis/redis.service';
     JwtStrategy,
     GoogleStrategy,
     GithubStrategy,
+    OAuthConfigService,
     RedisService,
   ],
   exports: [AuthService, JwtModule],
