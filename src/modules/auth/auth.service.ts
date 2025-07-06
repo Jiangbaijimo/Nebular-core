@@ -24,7 +24,7 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const { email } = registerDto;
+    const { email, password, username, nickname } = registerDto;
 
     // 检查邮箱是否已存在
     const existingUser = await this.userService.findByEmailWithPassword(email);
@@ -36,14 +36,45 @@ export class AuthService {
     const userCount = await this.userService.getUserCount();
     const isFirstUser = userCount === 0;
 
-    // 生成随机用户名和昵称
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const username = `user_${randomSuffix}`;
-    const nickname = `用户${randomSuffix}`;
+    let finalUsername: string;
+    let finalNickname: string;
+    let finalPassword: string;
+    let randomPassword: string | undefined;
+
+    if (isFirstUser) {
+      // 第一个用户：使用提供的真实数据，如果没有提供则要求必填
+      if (!password) {
+        throw new ConflictException('第一个用户必须提供密码');
+      }
+      if (!username) {
+        throw new ConflictException('第一个用户必须提供用户名');
+      }
+      if (!nickname) {
+        throw new ConflictException('第一个用户必须提供昵称');
+      }
+      
+      // 检查用户名是否已存在
+      const existingUserByUsername = await this.userService.findByUsername(username);
+      if (existingUserByUsername) {
+        throw new ConflictException('用户名已被使用');
+      }
+      
+      finalUsername = username;
+      finalNickname = nickname;
+      finalPassword = password;
+    } else {
+      // 后续用户：只需要邮箱，其他信息随机生成
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      finalUsername = `user_${randomSuffix}`;
+      finalNickname = `用户${randomSuffix}`;
+      
+      // 生成随机密码
+      randomPassword = Math.random().toString(36).substring(2, 12) + 'A1';
+      finalPassword = randomPassword;
+    }
     
-    // 生成随机密码
-    const randomPassword = Math.random().toString(36).substring(2, 12) + 'A1';
-    const hashedPassword = await bcrypt.hash(randomPassword, 12);
+    // 加密密码
+    const hashedPassword = await bcrypt.hash(finalPassword, 12);
 
     let user;
     if (isFirstUser) {
@@ -51,8 +82,8 @@ export class AuthService {
       user = await this.userService.createAdmin({
         email,
         password: hashedPassword,
-        username,
-        nickname,
+        username: finalUsername,
+        nickname: finalNickname,
         provider: AuthProvider.LOCAL,
       });
       
@@ -65,8 +96,8 @@ export class AuthService {
       user = await this.userService.create({
         email,
         password: hashedPassword,
-        username,
-        nickname,
+        username: finalUsername,
+        nickname: finalNickname,
         provider: AuthProvider.LOCAL,
       });
     }
@@ -74,13 +105,19 @@ export class AuthService {
     // 生成令牌
     const tokens = await this.generateTokens(user);
 
-    return {
+    const result = {
       user: this.sanitizeUser(user),
       ...tokens,
       isFirstUser,
       message: isFirstUser ? '恭喜！您是第一个用户，已自动成为管理员' : '注册成功',
-      temporaryPassword: randomPassword, // 返回临时密码供用户使用
     };
+
+    // 如果是后续用户，返回生成的随机密码
+    if (!isFirstUser && randomPassword) {
+      (result as any).temporaryPassword = randomPassword;
+    }
+
+    return result;
   }
 
   async login(loginDto: LoginDto) {
@@ -179,10 +216,45 @@ export class AuthService {
     }
   }
 
-  async logout(userId: number) {
+  async logout(userId: number, accessToken?: string) {
     // 删除Redis中的refresh token
     await this.redisService.del(`refresh_token:${userId}`);
+    
+    // 如果提供了access token，将其加入黑名单
+    if (accessToken) {
+      // 解析token获取过期时间
+      try {
+        const decoded = this.jwtService.decode(accessToken) as any;
+        if (decoded && decoded.exp) {
+          // 计算token剩余有效时间
+          const now = Math.floor(Date.now() / 1000);
+          const ttl = decoded.exp - now;
+          
+          // 只有当token还未过期时才加入黑名单
+          if (ttl > 0) {
+            await this.redisService.set(`blacklist_token:${accessToken}`, '1', ttl);
+          }
+        }
+      } catch (error) {
+        // 如果token解析失败，忽略错误（可能是无效token）
+        console.warn('解析token失败:', error.message);
+      }
+    }
+    
     return { message: '退出登录成功' };
+  }
+
+  /**
+   * 检查token是否有效（未被注销）
+   */
+  async isTokenValid(token: string): Promise<boolean> {
+    try {
+      // 检查token是否在黑名单中
+      const isBlacklisted = await this.redisService.get(`blacklist_token:${token}`);
+      return !isBlacklisted;
+    } catch (error) {
+      return false;
+    }
   }
 
   async generateTokensForUser(user: User) {

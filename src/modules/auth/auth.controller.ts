@@ -8,6 +8,7 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
@@ -62,8 +63,14 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: User) {
-    return this.authService.logout(user.id);
+  async logout(@CurrentUser() user: User, @Req() req: Request) {
+    // 从请求头中提取access token
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader && authHeader.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : undefined;
+    
+    return this.authService.logout(user.id, accessToken);
   }
 
   @ApiOperation({ summary: '获取用户信息', description: '获取当前登录用户的详细信息' })
@@ -84,6 +91,37 @@ export class AuthController {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       roles: user.roles,
+    };
+  }
+
+  @ApiOperation({ summary: '验证token有效性', description: '检查当前token是否有效（未被注销）' })
+  @ApiResponse({ status: 200, description: '验证成功' })
+  @ApiResponse({ status: 401, description: 'token无效或已失效' })
+  @ApiBearerAuth('JWT-auth')
+  @Get('verify-token')
+  async verifyToken(@CurrentUser() user: User, @Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader && authHeader.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : undefined;
+    
+    if (!accessToken) {
+      throw new UnauthorizedException('未提供访问令牌');
+    }
+    
+    const isValid = await this.authService.isTokenValid(accessToken);
+    
+    if (!isValid) {
+      throw new UnauthorizedException('令牌已失效');
+    }
+    
+    return {
+      valid: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      }
     };
   }
 
